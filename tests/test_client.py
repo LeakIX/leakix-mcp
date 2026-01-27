@@ -230,9 +230,7 @@ class TestLeakIXClient:
             mock_http_client.request = AsyncMock(return_value=mock_response)
             mock_get.return_value = mock_http_client
 
-            results = await client.search(
-                "+leak.severity:high", scope="leak"
-            )
+            results = await client.search("+leak.severity:high", scope="leak")
 
             assert len(results) == 1
             mock_http_client.request.assert_called_once()
@@ -339,9 +337,7 @@ class TestLeakIXClient:
             assert mock_http_client.request.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_empty_response_handling(
-        self, client: LeakIXClient
-    ) -> None:
+    async def test_empty_response_handling(self, client: LeakIXClient) -> None:
         """Test handling of empty responses."""
         mock_response = make_response(200, [])
 
@@ -357,9 +353,7 @@ class TestLeakIXClient:
             assert results == []
 
     @pytest.mark.asyncio
-    async def test_null_services_and_leaks(
-        self, client: LeakIXClient
-    ) -> None:
+    async def test_null_services_and_leaks(self, client: LeakIXClient) -> None:
         """Test handling of null Services/Leaks in host response."""
         mock_response = make_response(
             200,

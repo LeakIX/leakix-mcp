@@ -17,16 +17,15 @@ help: ## Ask for help!
 
 .PHONY: setup
 setup: ## Setup development environment
-	python -m venv .venv
-	.venv/bin/pip install -e ".[dev]"
+	poetry install
 
 .PHONY: install
 install: ## Install the package
-	pip install -e .
+	poetry install --only main
 
 .PHONY: build
 build: ## Build the package
-	python -m build
+	poetry build
 
 .PHONY: clean
 clean: ## Clean build artifacts
@@ -35,32 +34,32 @@ clean: ## Clean build artifacts
 
 .PHONY: format
 format: ## Format code
-	ruff format src/ tests/
-	ruff check --fix src/ tests/
+	poetry run ruff format src/ tests/
+	poetry run ruff check --fix src/ tests/
 
 .PHONY: check-format
 check-format: ## Check code formatting
-	ruff format --check src/ tests/
-	ruff check src/ tests/
+	poetry run ruff format --check src/ tests/
+	poetry run ruff check src/ tests/
 
 .PHONY: lint
 lint: ## Run linter
-	ruff check src/ tests/
+	poetry run ruff check src/ tests/
 
 .PHONY: typecheck
 typecheck: ## Run type checker
-	mypy src/
+	poetry run mypy src/
 
 .PHONY: test
 test: ## Run tests
-	pytest tests/ -v
+	poetry run pytest tests/ -v
 
 .PHONY: check
 check: check-format lint typecheck ## Run all checks
 
 .PHONY: run
 run: ## Run the MCP server (requires LEAKIX_API_KEY env var)
-	python -m leakix_mcp.server
+	poetry run leakix-mcp
 
 .PHONY: fix-trailing-whitespace
 fix-trailing-whitespace: ## Remove trailing whitespaces from all files

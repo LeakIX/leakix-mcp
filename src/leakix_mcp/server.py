@@ -70,7 +70,7 @@ async def list_tools() -> list[Tool]:
             name="search_services",
             description=(
                 "Search LeakIX for exposed services (open ports, software, "
-                "protocols). Use query syntax like '+country:\"France\" "
+                'protocols). Use query syntax like \'+country:"France" '
                 "+port:22' or '+plugin:OpenSSH'. Returns detailed service "
                 "info including IP, port, software, geolocation, network."
             ),
