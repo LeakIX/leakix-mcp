@@ -184,11 +184,13 @@ class TestParseL9Event:
         result = parse_l9event(minimal)
         # Should return either L9Event or dict depending on l9format behavior
         assert result is not None
-        # Access ip via attribute or dict key
+        # Access ip via dict key or to_dict()
         if isinstance(result, dict):
             assert result["ip"] == "1.2.3.4"
         else:
-            assert result.ip == "1.2.3.4"
+            # L9Event uses to_dict() for serialization
+            data = result.to_dict()
+            assert data["ip"] == "1.2.3.4"
 
     def test_parse_l9events_list(self) -> None:
         """Test parsing a list of events."""
