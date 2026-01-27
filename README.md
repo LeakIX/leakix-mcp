@@ -23,12 +23,25 @@ and security issues through natural conversation.
 - **Subdomain Enumeration**: List discovered subdomains
 - **Plugin Discovery**: Browse available detection plugins
 
+## Requirements
+
+- Python 3.13 or later
+
 ## Installation
 
 ### Using pip
 
 ```bash
 pip install leakix-mcp
+```
+
+### Using Poetry (recommended)
+
+```bash
+pip install poetry
+git clone https://github.com/LeakIX/leakix-mcp.git
+cd leakix-mcp
+poetry install
 ```
 
 ### From source
