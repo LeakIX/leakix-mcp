@@ -5,6 +5,7 @@ import os
 import sys
 from typing import Any
 
+from l9format import l9format
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
@@ -32,22 +33,46 @@ def get_client() -> LeakIXClient:
     return _client
 
 
+def serialize_l9event(obj: Any) -> Any:
+    """Serialize L9Event objects to dicts for JSON encoding."""
+    if isinstance(obj, l9format.L9Event):
+        return obj.to_dict()
+    return str(obj)
+
+
 def format_result(data: Any) -> str:
-    """Format result data as JSON string."""
-    return json.dumps(data, indent=2, default=str)
+    """Format result data as JSON string.
+
+    Handles L9Event objects by converting them to dicts.
+    """
+    if isinstance(data, list):
+        data = [
+            item.to_dict() if isinstance(item, l9format.L9Event) else item
+            for item in data
+        ]
+    elif isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, list):
+                data[key] = [
+                    item.to_dict()
+                    if isinstance(item, l9format.L9Event)
+                    else item
+                    for item in value
+                ]
+    return json.dumps(data, indent=2, default=serialize_l9event)
 
 
-@server.list_tools()
+@server.list_tools()  # type: ignore[no-untyped-call,untyped-decorator]
 async def list_tools() -> list[Tool]:
     """List available LeakIX tools."""
     return [
         Tool(
             name="search_services",
             description=(
-                "Search LeakIX for exposed services (open ports, running software, "
-                "protocols). Use query syntax like '+country:\"France\" +port:22' "
-                "or '+plugin:OpenSSH'. Returns detailed service information "
-                "including IP, port, software, geolocation, and network data."
+                "Search LeakIX for exposed services (open ports, software, "
+                "protocols). Use query syntax like '+country:\"France\" "
+                "+port:22' or '+plugin:OpenSSH'. Returns detailed service "
+                "info including IP, port, software, geolocation, network."
             ),
             inputSchema={
                 "type": "object",
@@ -73,9 +98,9 @@ async def list_tools() -> list[Tool]:
             name="search_leaks",
             description=(
                 "Search LeakIX for data leaks and exposed databases. "
-                "Returns information about leaked credentials, exposed databases, "
-                "and data breaches. Use queries like '+leak.severity:critical' "
-                "or '+leak.dataset.infected:true'."
+                "Returns information about leaked credentials, exposed "
+                "databases, and data breaches. Use queries like "
+                "'+leak.severity:critical' or '+leak.dataset.infected:true'."
             ),
             inputSchema={
                 "type": "object",
@@ -83,8 +108,10 @@ async def list_tools() -> list[Tool]:
                     "query": {
                         "type": "string",
                         "description": (
-                            "Search query. Examples: '+leak.severity:critical', "
-                            "'+leak.dataset.rows:>1000', '+plugin:GitConfigHttpPlugin'"
+                            "Search query. Examples: "
+                            "'+leak.severity:critical', "
+                            "'+leak.dataset.rows:>1000', "
+                            "'+plugin:GitConfigHttpPlugin'"
                         ),
                     },
                     "page": {
@@ -101,8 +128,8 @@ async def list_tools() -> list[Tool]:
             description=(
                 "Get detailed information about a specific IP address. "
                 "Returns all known services and data leaks associated with "
-                "the IP, including open ports, software versions, SSL certificates, "
-                "and any exposed data."
+                "the IP, including open ports, software versions, SSL "
+                "certificates, and any exposed data."
             ),
             inputSchema={
                 "type": "object",
@@ -120,15 +147,15 @@ async def list_tools() -> list[Tool]:
             description=(
                 "Get information about a specific domain. "
                 "Returns services and data leaks associated with the domain "
-                "and its subdomains, including exposed services, certificates, "
-                "and potential security issues."
+                "and its subdomains, including exposed services, "
+                "certificates, and potential security issues."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "domain": {
                         "type": "string",
-                        "description": "Domain name to lookup (e.g., 'example.com').",
+                        "description": "Domain name (e.g., 'example.com').",
                     },
                 },
                 "required": ["domain"],
@@ -138,14 +165,15 @@ async def list_tools() -> list[Tool]:
             name="list_subdomains",
             description=(
                 "Enumerate discovered subdomains for a domain. "
-                "Returns a list of subdomains found through various discovery methods."
+                "Returns a list of subdomains found through various "
+                "discovery methods."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "domain": {
                         "type": "string",
-                        "description": "Domain name to enumerate subdomains for.",
+                        "description": "Domain name to enumerate subdomains.",
                     },
                 },
                 "required": ["domain"],
@@ -155,8 +183,9 @@ async def list_tools() -> list[Tool]:
             name="list_plugins",
             description=(
                 "Get the list of available LeakIX detection plugins. "
-                "Plugins identify specific services, software, and vulnerabilities. "
-                "Use plugin names in search queries with '+plugin:PluginName'."
+                "Plugins identify specific services, software, and "
+                "vulnerabilities. Use plugin names in search queries "
+                "with '+plugin:PluginName'."
             ),
             inputSchema={
                 "type": "object",
@@ -166,7 +195,7 @@ async def list_tools() -> list[Tool]:
     ]
 
 
-@server.call_tool()
+@server.call_tool()  # type: ignore[untyped-decorator]
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Execute a LeakIX tool."""
     client = get_client()

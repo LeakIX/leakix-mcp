@@ -1,8 +1,18 @@
 # LeakIX MCP Server
 
-An MCP (Model Context Protocol) server for the [LeakIX](https://leakix.net) API,
-enabling security research and reconnaissance through Claude and other MCP
-clients.
+An MCP server for the [LeakIX](https://leakix.net) API, enabling security
+research and reconnaissance through Claude and other MCP clients.
+
+## What is MCP?
+
+[Model Context Protocol (MCP)](https://modelcontextprotocol.io/) is an open
+standard that allows AI assistants like Claude to securely connect to external
+data sources and tools. Instead of copying and pasting data, MCP lets Claude
+directly query APIs, databases, and services on your behalf.
+
+This server implements MCP to give Claude access to LeakIX's security
+intelligence platform, allowing you to search for exposed services, data leaks,
+and security issues through natural conversation.
 
 ## Features
 

@@ -1,9 +1,43 @@
 """LeakIX API client."""
 
 import asyncio
+import logging
 from typing import Any
 
 import httpx
+from l9format import l9format
+
+logger = logging.getLogger(__name__)
+
+
+def parse_l9event(data: dict[str, Any]) -> l9format.L9Event | dict[str, Any]:
+    """Parse a dictionary into an L9Event, falling back to dict on error.
+
+    Args:
+        data: Raw event data from the API.
+
+    Returns:
+        Parsed L9Event or original dict if parsing fails.
+    """
+    try:
+        return l9format.L9Event.from_dict(data)
+    except Exception as e:
+        logger.debug("Failed to parse L9Event: %s", e)
+        return data
+
+
+def parse_l9events(
+    data: list[dict[str, Any]],
+) -> list[l9format.L9Event | dict[str, Any]]:
+    """Parse a list of dictionaries into L9Events.
+
+    Args:
+        data: List of raw event data from the API.
+
+    Returns:
+        List of parsed L9Events or original dicts.
+    """
+    return [parse_l9event(item) for item in data]
 
 
 class LeakIXClient:
@@ -74,14 +108,15 @@ class LeakIXClient:
             response = await client.request(method, path, params=params)
 
         response.raise_for_status()
-        return response.json()
+        data: dict[str, Any] | list[dict[str, Any]] = response.json()
+        return data
 
     async def search(
         self,
         query: str,
         scope: str = "service",
         page: int = 0,
-    ) -> list[dict[str, Any]]:
+    ) -> list[l9format.L9Event | dict[str, Any]]:
         """Search LeakIX for services or leaks.
 
         Args:
@@ -90,15 +125,18 @@ class LeakIXClient:
             page: Page number (0-indexed).
 
         Returns:
-            List of l9event results.
+            List of L9Event results.
         """
         params = {"q": query, "scope": scope, "page": page}
         result = await self._request("GET", "/search", params=params)
         if isinstance(result, list):
-            return result
+            return parse_l9events(result)
         return []
 
-    async def get_host(self, ip: str) -> dict[str, Any]:
+    async def get_host(
+        self,
+        ip: str,
+    ) -> dict[str, list[l9format.L9Event | dict[str, Any]]]:
         """Get information about a specific IP address.
 
         Args:
@@ -109,10 +147,16 @@ class LeakIXClient:
         """
         result = await self._request("GET", f"/host/{ip}")
         if isinstance(result, dict):
-            return result
+            return {
+                "Services": parse_l9events(result.get("Services") or []),
+                "Leaks": parse_l9events(result.get("Leaks") or []),
+            }
         return {"Services": [], "Leaks": []}
 
-    async def get_domain(self, domain: str) -> dict[str, Any]:
+    async def get_domain(
+        self,
+        domain: str,
+    ) -> dict[str, list[l9format.L9Event | dict[str, Any]]]:
         """Get information about a specific domain.
 
         Args:
@@ -123,10 +167,16 @@ class LeakIXClient:
         """
         result = await self._request("GET", f"/domain/{domain}")
         if isinstance(result, dict):
-            return result
+            return {
+                "Services": parse_l9events(result.get("Services") or []),
+                "Leaks": parse_l9events(result.get("Leaks") or []),
+            }
         return {"Services": [], "Leaks": []}
 
-    async def get_subdomains(self, domain: str) -> list[dict[str, Any]]:
+    async def get_subdomains(
+        self,
+        domain: str,
+    ) -> list[dict[str, Any]]:
         """Get subdomains for a domain.
 
         Args:
