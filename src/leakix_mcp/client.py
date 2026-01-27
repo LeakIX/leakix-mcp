@@ -1,0 +1,152 @@
+"""LeakIX API client."""
+
+import asyncio
+from typing import Any
+
+import httpx
+
+
+class LeakIXClient:
+    """Async client for the LeakIX API."""
+
+    BASE_URL = "https://leakix.net"
+    DEFAULT_TIMEOUT = 30.0
+
+    def __init__(self, api_key: str) -> None:
+        """Initialize the LeakIX client.
+
+        Args:
+            api_key: LeakIX API key for authentication.
+        """
+        self.api_key = api_key
+        self._client: httpx.AsyncClient | None = None
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create the HTTP client."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                base_url=self.BASE_URL,
+                headers={
+                    "accept": "application/json",
+                    "api-key": self.api_key,
+                },
+                timeout=self.DEFAULT_TIMEOUT,
+            )
+        return self._client
+
+    async def close(self) -> None:
+        """Close the HTTP client."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
+
+    async def _handle_rate_limit(self, response: httpx.Response) -> None:
+        """Handle rate limiting by waiting if necessary."""
+        if response.status_code == 429:
+            wait_ms = response.headers.get("x-limited-for", "1000")
+            wait_seconds = int(wait_ms) / 1000
+            await asyncio.sleep(wait_seconds)
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | list[dict[str, Any]]:
+        """Make an API request with rate limit handling.
+
+        Args:
+            method: HTTP method.
+            path: API path.
+            params: Query parameters.
+
+        Returns:
+            JSON response data.
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails.
+        """
+        client = await self._get_client()
+        response = await client.request(method, path, params=params)
+
+        if response.status_code == 429:
+            await self._handle_rate_limit(response)
+            response = await client.request(method, path, params=params)
+
+        response.raise_for_status()
+        return response.json()
+
+    async def search(
+        self,
+        query: str,
+        scope: str = "service",
+        page: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Search LeakIX for services or leaks.
+
+        Args:
+            query: Search query string.
+            scope: Either "service" or "leak".
+            page: Page number (0-indexed).
+
+        Returns:
+            List of l9event results.
+        """
+        params = {"q": query, "scope": scope, "page": page}
+        result = await self._request("GET", "/search", params=params)
+        if isinstance(result, list):
+            return result
+        return []
+
+    async def get_host(self, ip: str) -> dict[str, Any]:
+        """Get information about a specific IP address.
+
+        Args:
+            ip: IPv4 or IPv6 address.
+
+        Returns:
+            Host information with Services and Leaks arrays.
+        """
+        result = await self._request("GET", f"/host/{ip}")
+        if isinstance(result, dict):
+            return result
+        return {"Services": [], "Leaks": []}
+
+    async def get_domain(self, domain: str) -> dict[str, Any]:
+        """Get information about a specific domain.
+
+        Args:
+            domain: Domain name.
+
+        Returns:
+            Domain information with Services and Leaks arrays.
+        """
+        result = await self._request("GET", f"/domain/{domain}")
+        if isinstance(result, dict):
+            return result
+        return {"Services": [], "Leaks": []}
+
+    async def get_subdomains(self, domain: str) -> list[dict[str, Any]]:
+        """Get subdomains for a domain.
+
+        Args:
+            domain: Domain name.
+
+        Returns:
+            List of subdomain records.
+        """
+        result = await self._request("GET", f"/api/subdomains/{domain}")
+        if isinstance(result, list):
+            return result
+        return []
+
+    async def get_plugins(self) -> list[dict[str, Any]]:
+        """Get list of available plugins.
+
+        Returns:
+            List of plugin information.
+        """
+        result = await self._request("GET", "/api/plugins")
+        if isinstance(result, list):
+            return result
+        return []
