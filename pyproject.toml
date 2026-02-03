@@ -24,9 +24,8 @@ packages = [{ include = "leakix_mcp", from = "src" }]
 [tool.poetry.dependencies]
 python = "^3.10"
 mcp = "^1.26.0"
-httpx = "^0.28.1"
 pydantic = "^2.12.5"
-l9format = "^1.4.0"
+leakix = { git = "https://github.com/Chocapikk/LeakIXClient-Python.git", branch = "feat/add-endpoints-and-update-deps" }
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.2"

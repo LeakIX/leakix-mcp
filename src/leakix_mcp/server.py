@@ -5,7 +5,6 @@ import os
 import sys
 from typing import Any
 
-from l9format import l9format
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
@@ -33,9 +32,9 @@ def get_client() -> LeakIXClient:
     return _client
 
 
-def serialize_l9event(obj: Any) -> Any:
-    """Serialize L9Event objects to dicts for JSON encoding."""
-    if isinstance(obj, l9format.L9Event):
+def serialize_object(obj: Any) -> Any:
+    """Serialize objects to dicts for JSON encoding."""
+    if hasattr(obj, "to_dict"):
         return obj.to_dict()
     return str(obj)
 
@@ -43,23 +42,21 @@ def serialize_l9event(obj: Any) -> Any:
 def format_result(data: Any) -> str:
     """Format result data as JSON string.
 
-    Handles L9Event objects by converting them to dicts.
+    Handles L9Event and other objects by converting them to dicts.
     """
     if isinstance(data, list):
         data = [
-            item.to_dict() if isinstance(item, l9format.L9Event) else item
+            item.to_dict() if hasattr(item, "to_dict") else item
             for item in data
         ]
     elif isinstance(data, dict):
         for key, value in data.items():
             if isinstance(value, list):
                 data[key] = [
-                    item.to_dict()
-                    if isinstance(item, l9format.L9Event)
-                    else item
+                    item.to_dict() if hasattr(item, "to_dict") else item
                     for item in value
                 ]
-    return json.dumps(data, indent=2, default=serialize_l9event)
+    return json.dumps(data, indent=2, default=serialize_object)
 
 
 @server.list_tools()  # type: ignore[no-untyped-call,untyped-decorator]

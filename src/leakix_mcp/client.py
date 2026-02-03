@@ -1,51 +1,12 @@
-"""LeakIX API client."""
+"""LeakIX MCP client wrapper using the official leakix library."""
 
-import asyncio
-import json
-import logging
 from typing import Any
 
-import httpx
-from l9format import l9format
-
-logger = logging.getLogger(__name__)
-
-
-def parse_l9event(data: dict[str, Any]) -> l9format.L9Event | dict[str, Any]:
-    """Parse a dictionary into an L9Event, falling back to dict on error.
-
-    Args:
-        data: Raw event data from the API.
-
-    Returns:
-        Parsed L9Event or original dict if parsing fails.
-    """
-    try:
-        return l9format.L9Event.from_dict(data)
-    except Exception as e:
-        logger.debug("Failed to parse L9Event: %s", e)
-        return data
-
-
-def parse_l9events(
-    data: list[dict[str, Any]],
-) -> list[l9format.L9Event | dict[str, Any]]:
-    """Parse a list of dictionaries into L9Events.
-
-    Args:
-        data: List of raw event data from the API.
-
-    Returns:
-        List of parsed L9Events or original dicts.
-    """
-    return [parse_l9event(item) for item in data]
+from leakix import AsyncClient, RawQuery
 
 
 class LeakIXClient:
-    """Async client for the LeakIX API."""
-
-    BASE_URL = "https://leakix.net"
-    DEFAULT_TIMEOUT = 30.0
+    """MCP client wrapper for LeakIX API using the official async client."""
 
     def __init__(self, api_key: str) -> None:
         """Initialize the LeakIX client.
@@ -53,71 +14,18 @@ class LeakIXClient:
         Args:
             api_key: LeakIX API key for authentication.
         """
-        self.api_key = api_key
-        self._client: httpx.AsyncClient | None = None
-
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create the HTTP client."""
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(
-                base_url=self.BASE_URL,
-                headers={
-                    "accept": "application/json",
-                    "api-key": self.api_key,
-                },
-                timeout=self.DEFAULT_TIMEOUT,
-            )
-        return self._client
+        self._client = AsyncClient(api_key=api_key)
 
     async def close(self) -> None:
         """Close the HTTP client."""
-        if self._client is not None and not self._client.is_closed:
-            await self._client.aclose()
-            self._client = None
-
-    async def _handle_rate_limit(self, response: httpx.Response) -> None:
-        """Handle rate limiting by waiting if necessary."""
-        if response.status_code == 429:
-            wait_ms = response.headers.get("x-limited-for", "1000")
-            wait_seconds = int(wait_ms) / 1000
-            await asyncio.sleep(wait_seconds)
-
-    async def _request(
-        self,
-        method: str,
-        path: str,
-        params: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | list[dict[str, Any]]:
-        """Make an API request with rate limit handling.
-
-        Args:
-            method: HTTP method.
-            path: API path.
-            params: Query parameters.
-
-        Returns:
-            JSON response data.
-
-        Raises:
-            httpx.HTTPStatusError: If the request fails.
-        """
-        client = await self._get_client()
-        response = await client.request(method, path, params=params)
-
-        if response.status_code == 429:
-            await self._handle_rate_limit(response)
-            response = await client.request(method, path, params=params)
-
-        response.raise_for_status()
-        data: dict[str, Any] | list[dict[str, Any]] = response.json()
-        return data
+        await self._client.close()
 
     async def search(
         self,
         query: str,
         scope: str = "service",
         page: int = 0,
-    ) -> list[l9format.L9Event | dict[str, Any]]:
+    ) -> list[Any]:
         """Search LeakIX for services or leaks.
 
         Args:
@@ -128,56 +36,31 @@ class LeakIXClient:
         Returns:
             List of L9Event results.
         """
-        params = {"q": query, "scope": scope, "page": page}
-        result = await self._request("GET", "/search", params=params)
-        if isinstance(result, list):
-            return parse_l9events(result)
-        return []
+        return await self._client.search(query, scope=scope, page=page)
 
-    async def get_host(
-        self,
-        ip: str,
-    ) -> dict[str, list[l9format.L9Event | dict[str, Any]]]:
+    async def get_host(self, ip: str) -> dict[str, list[Any]]:
         """Get information about a specific IP address.
 
         Args:
             ip: IPv4 or IPv6 address.
 
         Returns:
-            Host information with Services and Leaks arrays.
+            Dict with 'services' and 'leaks' lists.
         """
-        result = await self._request("GET", f"/host/{ip}")
-        if isinstance(result, dict):
-            return {
-                "Services": parse_l9events(result.get("Services") or []),
-                "Leaks": parse_l9events(result.get("Leaks") or []),
-            }
-        return {"Services": [], "Leaks": []}
+        return await self._client.get_host(ip)
 
-    async def get_domain(
-        self,
-        domain: str,
-    ) -> dict[str, list[l9format.L9Event | dict[str, Any]]]:
+    async def get_domain(self, domain: str) -> dict[str, list[Any]]:
         """Get information about a specific domain.
 
         Args:
             domain: Domain name.
 
         Returns:
-            Domain information with Services and Leaks arrays.
+            Dict with 'services' and 'leaks' lists.
         """
-        result = await self._request("GET", f"/domain/{domain}")
-        if isinstance(result, dict):
-            return {
-                "Services": parse_l9events(result.get("Services") or []),
-                "Leaks": parse_l9events(result.get("Leaks") or []),
-            }
-        return {"Services": [], "Leaks": []}
+        return await self._client.get_domain(domain)
 
-    async def get_subdomains(
-        self,
-        domain: str,
-    ) -> list[dict[str, Any]]:
+    async def get_subdomains(self, domain: str) -> list[Any]:
         """Get subdomains for a domain.
 
         Args:
@@ -186,72 +69,40 @@ class LeakIXClient:
         Returns:
             List of subdomain records.
         """
-        result = await self._request("GET", f"/api/subdomains/{domain}")
-        if isinstance(result, list):
-            return result
-        return []
+        return await self._client.get_subdomains(domain)
 
-    async def get_plugins(self) -> list[dict[str, Any]]:
+    async def get_plugins(self) -> list[Any]:
         """Get list of available plugins.
 
         Returns:
             List of plugin information.
         """
-        result = await self._request("GET", "/api/plugins")
-        if isinstance(result, list):
-            return result
-        return []
+        return await self._client.get_plugins()
 
     async def bulk_export(
         self,
         query: str,
         max_results: int = 1000,
-    ) -> list[dict[str, Any]]:
+    ) -> list[Any]:
         """Bulk export leaks (Pro API feature).
-
-        Streams results from the bulk endpoint and returns aggregations.
 
         Args:
             query: Search query string.
             max_results: Maximum number of results to return.
 
         Returns:
-            List of aggregation results with events.
+            List of aggregation results.
         """
-        client = await self._get_client()
-        params = {"q": query}
-
-        results: list[dict[str, Any]] = []
-        async with client.stream(
-            "GET", "/bulk/search", params=params
-        ) as response:
-            if response.status_code == 429:
-                await self._handle_rate_limit(response)
-                async with client.stream(
-                    "GET", "/bulk/search", params=params
-                ) as retry_response:
-                    retry_response.raise_for_status()
-                    async for line in retry_response.aiter_lines():
-                        if line and len(results) < max_results:
-                            data = json.loads(line)
-                            results.append(data)
-                return results
-
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if line and len(results) < max_results:
-                    data = json.loads(line)
-                    results.append(data)
-
+        queries = [RawQuery(query)]
+        results: list[Any] = []
+        async for item in self._client.bulk_export_stream(queries):
+            results.append(item)
+            if len(results) >= max_results:
+                break
         return results
 
-    async def quick_recon(
-        self,
-        target: str,
-    ) -> dict[str, Any]:
+    async def quick_recon(self, target: str) -> dict[str, Any]:
         """Quick reconnaissance on a target (IP or domain).
-
-        Performs host lookup, domain lookup, and subdomain enumeration.
 
         Args:
             target: IP address or domain name.
@@ -285,15 +136,18 @@ class LeakIXClient:
     async def check_api_status(self) -> dict[str, Any]:
         """Check API status and detect Pro subscription.
 
-        Tests a Pro-only plugin to detect subscription level.
-
         Returns:
             API status with Pro detection and available features.
         """
         status: dict[str, Any] = {
             "authenticated": True,
             "is_pro": False,
-            "features": ["search", "host_lookup", "domain_lookup", "subdomains"],
+            "features": [
+                "search",
+                "host_lookup",
+                "domain_lookup",
+                "subdomains",
+            ],
         }
 
         # Test Pro by querying a Pro-only plugin (WpPlugin has data)
@@ -314,13 +168,8 @@ class LeakIXClient:
 
         return status
 
-    async def exposure_report(
-        self,
-        target: str,
-    ) -> dict[str, Any]:
+    async def exposure_report(self, target: str) -> dict[str, Any]:
         """Generate a security exposure report for a target.
-
-        Combines all available data into a structured security report.
 
         Args:
             target: IP address or domain name.
@@ -365,7 +214,7 @@ class LeakIXClient:
                 pass
 
         # Process services
-        services = data.get("Services") or []
+        services = data.get("services") or []
         report["services"] = services
         report["summary"]["total_services"] = len(services)
 
@@ -376,31 +225,19 @@ class LeakIXClient:
         for svc in services:
             if hasattr(svc, "port"):
                 ports_seen.add(svc.port)
-            elif isinstance(svc, dict):
-                ports_seen.add(svc.get("port", 0))
-
             if hasattr(svc, "software") and svc.software:
                 if hasattr(svc.software, "name") and svc.software.name:
                     technologies_seen.add(svc.software.name)
-            elif isinstance(svc, dict) and svc.get("software"):
-                tech = svc["software"].get("name")
-                if tech:
-                    technologies_seen.add(tech)
-
             if hasattr(svc, "geoip") and svc.geoip:
                 if hasattr(svc.geoip, "country_name") and svc.geoip.country_name:
                     countries_seen.add(svc.geoip.country_name)
-            elif isinstance(svc, dict) and svc.get("geoip"):
-                country = svc["geoip"].get("country_name")
-                if country:
-                    countries_seen.add(country)
 
         report["summary"]["exposed_ports"] = sorted(ports_seen)
         report["summary"]["technologies"] = sorted(technologies_seen)
         report["summary"]["countries"] = sorted(countries_seen)
 
         # Process leaks
-        leaks = data.get("Leaks") or []
+        leaks = data.get("leaks") or []
         report["leaks"] = leaks
         report["summary"]["total_leaks"] = len(leaks)
 
@@ -411,15 +248,8 @@ class LeakIXClient:
             if hasattr(leak, "leak") and leak.leak:
                 if hasattr(leak.leak, "severity"):
                     severity = leak.leak.severity
-            elif isinstance(leak, dict) and leak.get("leak"):
-                severity = leak["leak"].get("severity")
-
             if severity in ("critical", "high"):
-                plugin = None
-                if hasattr(leak, "event_source"):
-                    plugin = leak.event_source
-                elif isinstance(leak, dict):
-                    plugin = leak.get("event_source")
+                plugin = getattr(leak, "event_source", None)
                 if plugin:
                     critical.append(f"{severity}: {plugin}")
 
@@ -475,11 +305,10 @@ class LeakIXClient:
         else:
             data = await self.get_domain(target)
 
-        services = data.get("Services") or []
+        services = data.get("services") or []
         if not services:
             return results
 
-        # Extract characteristics for searching
         first_svc = services[0]
 
         if relation_type == "technology":
@@ -487,8 +316,6 @@ class LeakIXClient:
             if hasattr(first_svc, "software") and first_svc.software:
                 if hasattr(first_svc.software, "name"):
                     software_name = first_svc.software.name
-            elif isinstance(first_svc, dict) and first_svc.get("software"):
-                software_name = first_svc["software"].get("name")
 
             if software_name:
                 query = f'+software.name:"{software_name}"'
@@ -501,8 +328,6 @@ class LeakIXClient:
             if hasattr(first_svc, "network") and first_svc.network:
                 if hasattr(first_svc.network, "asn"):
                     asn = first_svc.network.asn
-            elif isinstance(first_svc, dict) and first_svc.get("network"):
-                asn = first_svc["network"].get("asn")
 
             if asn:
                 query = f"+asn:{asn}"
@@ -515,8 +340,6 @@ class LeakIXClient:
             if hasattr(first_svc, "network") and first_svc.network:
                 if hasattr(first_svc.network, "network"):
                     network = first_svc.network.network
-            elif isinstance(first_svc, dict) and first_svc.get("network"):
-                network = first_svc["network"].get("network")
 
             if network:
                 query = f'+network:"{network}"'
