@@ -66,37 +66,12 @@ class LeakIXClient:
     async def check_api_status(self) -> dict[str, Any]:
         """Check API status and detect Pro subscription.
 
+        Delegates to the underlying AsyncClient which caches the result.
+
         Returns:
             API status with Pro detection and available features.
         """
-        status: dict[str, Any] = {
-            "authenticated": True,
-            "is_pro": False,
-            "features": [
-                "search",
-                "host_lookup",
-                "domain_lookup",
-                "subdomains",
-            ],
-        }
-
-        # Test Pro by querying a Pro-only plugin
-        try:
-            result = await self.api.search("+plugin:WpUserEnumHttp", scope="leak", page=0)
-            if result and len(result) > 0:
-                status["is_pro"] = True
-                status["features"].extend(["bulk_export", "pro_plugins"])
-        except Exception:
-            pass
-
-        # Get available plugins count
-        try:
-            plugins = await self.api.get_plugins()
-            status["plugins_count"] = len(plugins)
-        except Exception:
-            status["plugins_count"] = 0
-
-        return status
+        return await self.api.get_api_status()
 
     async def exposure_report(self, target: str) -> dict[str, Any]:
         """Generate a security exposure report for a target.
