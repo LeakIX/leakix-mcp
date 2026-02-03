@@ -24,6 +24,9 @@ and security issues through natural conversation.
 - **Plugin Discovery**: Browse available detection plugins
 - **Bulk Export**: Large-scale data export for Pro API users
 - **Quick Recon**: Fast initial assessment combining multiple lookups
+- **API Status Check**: Detect Pro subscription and available features
+- **Exposure Report**: Generate comprehensive security assessment reports
+- **Find Related**: Discover related targets by technology, ASN, or network
 
 ## Requirements
 
@@ -172,6 +175,42 @@ Quick reconnaissance on a target IP or domain. Automatically detects target type
 
 **For IPs:** Returns host services and leaks
 **For domains:** Returns domain info + subdomain enumeration
+
+### check_api_status
+
+Check API status and detect Pro subscription. Automatically tests Pro-only plugins to determine subscription level.
+
+**Returns:**
+- `authenticated`: Authentication status
+- `is_pro`: Pro subscription detected
+- `features`: Available features list
+- `plugins_count`: Number of accessible plugins
+
+### exposure_report
+
+Generate a comprehensive security exposure report for a target.
+
+**Parameters:**
+- `target` (required): IP address or domain to analyze
+
+**Returns:**
+- Risk level (critical/high/medium/low/minimal)
+- Critical findings
+- Exposed ports
+- Technologies detected
+- Leak summary
+- Subdomain count (for domains)
+
+### find_related
+
+Find targets related to a given IP or domain based on shared characteristics.
+
+**Parameters:**
+- `target` (required): IP address or domain
+- `relation_type` (optional): Type of relation
+  - `technology` (default): Same software stack
+  - `asn`: Same autonomous system
+  - `network`: Same network range
 
 ## Query Syntax
 

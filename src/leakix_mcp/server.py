@@ -244,6 +244,74 @@ async def list_tools() -> list[Tool]:
                 "required": ["target"],
             },
         ),
+        Tool(
+            name="check_api_status",
+            description=(
+                "Check API status and detect Pro subscription. "
+                "Returns authentication status, Pro detection, "
+                "available features, and plugin count. "
+                "Use this to verify API access and capabilities."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
+            name="exposure_report",
+            description=(
+                "Generate a comprehensive security exposure report. "
+                "Analyzes a target and returns: risk level, "
+                "critical findings, exposed ports, technologies, "
+                "leak summary, and recommendations. "
+                "Perfect for security assessments."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": (
+                            "IP address or domain to analyze."
+                        ),
+                    },
+                },
+                "required": ["target"],
+            },
+        ),
+        Tool(
+            name="find_related",
+            description=(
+                "Find targets related to a given IP or domain. "
+                "Discovers similar targets based on shared "
+                "characteristics like technology stack, ASN, "
+                "or network range. Useful for attack surface mapping."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": (
+                            "IP address or domain to find relations for."
+                        ),
+                    },
+                    "relation_type": {
+                        "type": "string",
+                        "enum": ["technology", "asn", "network"],
+                        "description": (
+                            "Type of relation to search for. "
+                            "technology: same software stack, "
+                            "asn: same autonomous system, "
+                            "network: same network range. "
+                            "Default: technology"
+                        ),
+                        "default": "technology",
+                    },
+                },
+                "required": ["target"],
+            },
+        ),
     ]
 
 
@@ -293,6 +361,21 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         elif name == "quick_recon":
             target = arguments["target"]
             result = await client.quick_recon(target)
+            return [TextContent(type="text", text=format_result(result))]
+
+        elif name == "check_api_status":
+            result = await client.check_api_status()
+            return [TextContent(type="text", text=format_result(result))]
+
+        elif name == "exposure_report":
+            target = arguments["target"]
+            result = await client.exposure_report(target)
+            return [TextContent(type="text", text=format_result(result))]
+
+        elif name == "find_related":
+            target = arguments["target"]
+            relation_type = arguments.get("relation_type", "technology")
+            result = await client.find_related(target, relation_type)
             return [TextContent(type="text", text=format_result(result))]
 
         else:

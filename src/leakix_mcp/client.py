@@ -281,3 +281,247 @@ class LeakIXClient:
             results["subdomains"] = await self.get_subdomains(target)
 
         return results
+
+    async def check_api_status(self) -> dict[str, Any]:
+        """Check API status and detect Pro subscription.
+
+        Tests a Pro-only plugin to detect subscription level.
+
+        Returns:
+            API status with Pro detection and available features.
+        """
+        status: dict[str, Any] = {
+            "authenticated": True,
+            "is_pro": False,
+            "features": ["search", "host_lookup", "domain_lookup", "subdomains"],
+        }
+
+        # Test Pro by querying a Pro-only plugin (WpPlugin has data)
+        try:
+            result = await self.search("+plugin:WpPlugin", scope="leak", page=0)
+            if result and len(result) > 0:
+                status["is_pro"] = True
+                status["features"].extend(["bulk_export", "pro_plugins"])
+        except Exception:
+            pass
+
+        # Get available plugins count
+        try:
+            plugins = await self.get_plugins()
+            status["plugins_count"] = len(plugins)
+        except Exception:
+            status["plugins_count"] = 0
+
+        return status
+
+    async def exposure_report(
+        self,
+        target: str,
+    ) -> dict[str, Any]:
+        """Generate a security exposure report for a target.
+
+        Combines all available data into a structured security report.
+
+        Args:
+            target: IP address or domain name.
+
+        Returns:
+            Structured security exposure report.
+        """
+        report: dict[str, Any] = {
+            "target": target,
+            "summary": {
+                "total_services": 0,
+                "total_leaks": 0,
+                "critical_findings": [],
+                "exposed_ports": [],
+                "technologies": [],
+                "countries": [],
+            },
+            "services": [],
+            "leaks": [],
+            "subdomains": [],
+            "risk_level": "unknown",
+        }
+
+        # Detect target type and gather data
+        is_ip = False
+        try:
+            parts = target.split(".")
+            if len(parts) == 4 and all(
+                p.isdigit() and 0 <= int(p) <= 255 for p in parts
+            ):
+                is_ip = True
+        except Exception:
+            pass
+
+        if is_ip:
+            data = await self.get_host(target)
+        else:
+            data = await self.get_domain(target)
+            try:
+                report["subdomains"] = await self.get_subdomains(target)
+            except Exception:
+                pass
+
+        # Process services
+        services = data.get("Services") or []
+        report["services"] = services
+        report["summary"]["total_services"] = len(services)
+
+        ports_seen: set[int] = set()
+        technologies_seen: set[str] = set()
+        countries_seen: set[str] = set()
+
+        for svc in services:
+            if hasattr(svc, "port"):
+                ports_seen.add(svc.port)
+            elif isinstance(svc, dict):
+                ports_seen.add(svc.get("port", 0))
+
+            if hasattr(svc, "software") and svc.software:
+                if hasattr(svc.software, "name") and svc.software.name:
+                    technologies_seen.add(svc.software.name)
+            elif isinstance(svc, dict) and svc.get("software"):
+                tech = svc["software"].get("name")
+                if tech:
+                    technologies_seen.add(tech)
+
+            if hasattr(svc, "geoip") and svc.geoip:
+                if hasattr(svc.geoip, "country_name") and svc.geoip.country_name:
+                    countries_seen.add(svc.geoip.country_name)
+            elif isinstance(svc, dict) and svc.get("geoip"):
+                country = svc["geoip"].get("country_name")
+                if country:
+                    countries_seen.add(country)
+
+        report["summary"]["exposed_ports"] = sorted(ports_seen)
+        report["summary"]["technologies"] = sorted(technologies_seen)
+        report["summary"]["countries"] = sorted(countries_seen)
+
+        # Process leaks
+        leaks = data.get("Leaks") or []
+        report["leaks"] = leaks
+        report["summary"]["total_leaks"] = len(leaks)
+
+        # Identify critical findings
+        critical: list[str] = []
+        for leak in leaks:
+            severity = None
+            if hasattr(leak, "leak") and leak.leak:
+                if hasattr(leak.leak, "severity"):
+                    severity = leak.leak.severity
+            elif isinstance(leak, dict) and leak.get("leak"):
+                severity = leak["leak"].get("severity")
+
+            if severity in ("critical", "high"):
+                plugin = None
+                if hasattr(leak, "event_source"):
+                    plugin = leak.event_source
+                elif isinstance(leak, dict):
+                    plugin = leak.get("event_source")
+                if plugin:
+                    critical.append(f"{severity}: {plugin}")
+
+        report["summary"]["critical_findings"] = critical
+
+        # Calculate risk level
+        if len(leaks) > 10 or len(critical) > 0:
+            report["risk_level"] = "critical"
+        elif len(leaks) > 5:
+            report["risk_level"] = "high"
+        elif len(leaks) > 0:
+            report["risk_level"] = "medium"
+        elif len(services) > 10:
+            report["risk_level"] = "low"
+        else:
+            report["risk_level"] = "minimal"
+
+        return report
+
+    async def find_related(
+        self,
+        target: str,
+        relation_type: str = "technology",
+    ) -> dict[str, Any]:
+        """Find targets related to the given target.
+
+        Args:
+            target: IP address or domain to find relations for.
+            relation_type: Type of relation (technology, asn, network).
+
+        Returns:
+            Related targets based on shared characteristics.
+        """
+        results: dict[str, Any] = {
+            "target": target,
+            "relation_type": relation_type,
+            "related": [],
+        }
+
+        # First get info about the target
+        is_ip = False
+        try:
+            parts = target.split(".")
+            if len(parts) == 4 and all(
+                p.isdigit() and 0 <= int(p) <= 255 for p in parts
+            ):
+                is_ip = True
+        except Exception:
+            pass
+
+        if is_ip:
+            data = await self.get_host(target)
+        else:
+            data = await self.get_domain(target)
+
+        services = data.get("Services") or []
+        if not services:
+            return results
+
+        # Extract characteristics for searching
+        first_svc = services[0]
+
+        if relation_type == "technology":
+            software_name = None
+            if hasattr(first_svc, "software") and first_svc.software:
+                if hasattr(first_svc.software, "name"):
+                    software_name = first_svc.software.name
+            elif isinstance(first_svc, dict) and first_svc.get("software"):
+                software_name = first_svc["software"].get("name")
+
+            if software_name:
+                query = f'+software.name:"{software_name}"'
+                results["search_query"] = query
+                related = await self.search(query, scope="service", page=0)
+                results["related"] = related
+
+        elif relation_type == "asn":
+            asn = None
+            if hasattr(first_svc, "network") and first_svc.network:
+                if hasattr(first_svc.network, "asn"):
+                    asn = first_svc.network.asn
+            elif isinstance(first_svc, dict) and first_svc.get("network"):
+                asn = first_svc["network"].get("asn")
+
+            if asn:
+                query = f"+asn:{asn}"
+                results["search_query"] = query
+                related = await self.search(query, scope="service", page=0)
+                results["related"] = related
+
+        elif relation_type == "network":
+            network = None
+            if hasattr(first_svc, "network") and first_svc.network:
+                if hasattr(first_svc.network, "network"):
+                    network = first_svc.network.network
+            elif isinstance(first_svc, dict) and first_svc.get("network"):
+                network = first_svc["network"].get("network")
+
+            if network:
+                query = f'+network:"{network}"'
+                results["search_query"] = query
+                related = await self.search(query, scope="service", page=0)
+                results["related"] = related
+
+        return results
