@@ -192,6 +192,58 @@ async def list_tools() -> list[Tool]:
                 "properties": {},
             },
         ),
+        Tool(
+            name="bulk_export",
+            description=(
+                "Bulk export leak data (requires Pro API). "
+                "Returns aggregated results for large-scale analysis. "
+                "Use this for exporting large datasets efficiently. "
+                "Results include grouped events by target."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "Search query. Examples: "
+                            "'+plugin:GitConfigHttpPlugin', "
+                            "'+country:FR +plugin:MongoOpenPlugin'"
+                        ),
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": (
+                            "Maximum results to return. Default: 1000"
+                        ),
+                        "default": 1000,
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="quick_recon",
+            description=(
+                "Quick reconnaissance on a target IP or domain. "
+                "Automatically detects target type and performs: "
+                "- For IPs: host lookup with services and leaks "
+                "- For domains: domain lookup + subdomain enumeration "
+                "Use this for fast initial assessment of a target."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": (
+                            "IP address or domain name to investigate."
+                        ),
+                    },
+                },
+                "required": ["target"],
+            },
+        ),
     ]
 
 
@@ -231,6 +283,17 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         elif name == "list_plugins":
             results = await client.get_plugins()
             return [TextContent(type="text", text=format_result(results))]
+
+        elif name == "bulk_export":
+            query = arguments["query"]
+            max_results = arguments.get("max_results", 1000)
+            results = await client.bulk_export(query, max_results=max_results)
+            return [TextContent(type="text", text=format_result(results))]
+
+        elif name == "quick_recon":
+            target = arguments["target"]
+            result = await client.quick_recon(target)
+            return [TextContent(type="text", text=format_result(result))]
 
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]

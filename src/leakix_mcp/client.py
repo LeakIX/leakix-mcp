@@ -1,6 +1,7 @@
 """LeakIX API client."""
 
 import asyncio
+import json
 import logging
 from typing import Any
 
@@ -200,3 +201,83 @@ class LeakIXClient:
         if isinstance(result, list):
             return result
         return []
+
+    async def bulk_export(
+        self,
+        query: str,
+        max_results: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """Bulk export leaks (Pro API feature).
+
+        Streams results from the bulk endpoint and returns aggregations.
+
+        Args:
+            query: Search query string.
+            max_results: Maximum number of results to return.
+
+        Returns:
+            List of aggregation results with events.
+        """
+        client = await self._get_client()
+        params = {"q": query}
+
+        results: list[dict[str, Any]] = []
+        async with client.stream(
+            "GET", "/bulk/search", params=params
+        ) as response:
+            if response.status_code == 429:
+                await self._handle_rate_limit(response)
+                async with client.stream(
+                    "GET", "/bulk/search", params=params
+                ) as retry_response:
+                    retry_response.raise_for_status()
+                    async for line in retry_response.aiter_lines():
+                        if line and len(results) < max_results:
+                            data = json.loads(line)
+                            results.append(data)
+                return results
+
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if line and len(results) < max_results:
+                    data = json.loads(line)
+                    results.append(data)
+
+        return results
+
+    async def quick_recon(
+        self,
+        target: str,
+    ) -> dict[str, Any]:
+        """Quick reconnaissance on a target (IP or domain).
+
+        Performs host lookup, domain lookup, and subdomain enumeration.
+
+        Args:
+            target: IP address or domain name.
+
+        Returns:
+            Combined reconnaissance results.
+        """
+        results: dict[str, Any] = {"target": target, "type": "unknown"}
+
+        # Detect if target is IP or domain
+        is_ip = False
+        try:
+            parts = target.split(".")
+            if len(parts) == 4 and all(
+                p.isdigit() and 0 <= int(p) <= 255 for p in parts
+            ):
+                is_ip = True
+        except Exception:
+            pass
+
+        if is_ip:
+            results["type"] = "ip"
+            results["host"] = await self.get_host(target)
+        else:
+            results["type"] = "domain"
+            results["domain"] = await self.get_domain(target)
+            results["subdomains"] = await self.get_subdomains(target)
+
+        return results

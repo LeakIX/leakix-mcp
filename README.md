@@ -22,10 +22,12 @@ and security issues through natural conversation.
 - **Domain Lookup**: Investigate domains and their associated services
 - **Subdomain Enumeration**: List discovered subdomains
 - **Plugin Discovery**: Browse available detection plugins
+- **Bulk Export**: Large-scale data export for Pro API users
+- **Quick Recon**: Fast initial assessment combining multiple lookups
 
 ## Requirements
 
-- Python 3.13 or later
+- Python 3.10 or later
 
 ## Installation
 
@@ -148,6 +150,28 @@ Enumerate discovered subdomains for a domain.
 ### list_plugins
 
 Get available LeakIX detection plugins.
+
+### bulk_export
+
+Bulk export leak data (requires Pro API).
+
+**Parameters:**
+- `query` (required): Search query
+- `max_results` (optional): Maximum results (default: 1000)
+
+**Example queries:**
+- `+plugin:GitConfigHttpPlugin` - Exposed Git configurations
+- `+country:FR +plugin:MongoOpenPlugin` - MongoDB in France
+
+### quick_recon
+
+Quick reconnaissance on a target IP or domain. Automatically detects target type and performs appropriate lookups.
+
+**Parameters:**
+- `target` (required): IP address or domain name
+
+**For IPs:** Returns host services and leaks
+**For domains:** Returns domain info + subdomain enumeration
 
 ## Query Syntax
 
