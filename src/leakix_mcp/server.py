@@ -321,38 +321,38 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         if name == "search_services":
             query = arguments["query"]
             page = arguments.get("page", 0)
-            results = await client.search(query, scope="service", page=page)
+            results = await client.api.search(query, scope="service", page=page)
             return [TextContent(type="text", text=format_result(results))]
 
         elif name == "search_leaks":
             query = arguments["query"]
             page = arguments.get("page", 0)
-            results = await client.search(query, scope="leak", page=page)
+            results = await client.api.search(query, scope="leak", page=page)
             return [TextContent(type="text", text=format_result(results))]
 
         elif name == "host_lookup":
             ip = arguments["ip"]
-            result = await client.get_host(ip)
+            result = await client.api.get_host(ip)
             return [TextContent(type="text", text=format_result(result))]
 
         elif name == "domain_lookup":
             domain = arguments["domain"]
-            result = await client.get_domain(domain)
+            result = await client.api.get_domain(domain)
             return [TextContent(type="text", text=format_result(result))]
 
         elif name == "list_subdomains":
             domain = arguments["domain"]
-            results = await client.get_subdomains(domain)
+            results = await client.api.get_subdomains(domain)
             return [TextContent(type="text", text=format_result(results))]
 
         elif name == "list_plugins":
-            results = await client.get_plugins()
+            results = await client.api.get_plugins()
             return [TextContent(type="text", text=format_result(results))]
 
         elif name == "bulk_export":
             query = arguments["query"]
             max_results = arguments.get("max_results", 1000)
-            results = await client.bulk_export(query, max_results=max_results)
+            results = await client.api.bulk_export(query, max_results=max_results)
             return [TextContent(type="text", text=format_result(results))]
 
         elif name == "quick_recon":

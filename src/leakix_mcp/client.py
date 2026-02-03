@@ -1,12 +1,16 @@
-"""LeakIX MCP client wrapper using the official leakix library."""
+"""LeakIX MCP client with high-level reconnaissance methods."""
 
 from typing import Any
 
-from leakix import AsyncClient, RawQuery
+from leakix import AsyncClient
 
 
 class LeakIXClient:
-    """MCP client wrapper for LeakIX API using the official async client."""
+    """MCP client for LeakIX with high-level recon methods.
+
+    The `api` attribute exposes the underlying AsyncClient for direct access
+    to core methods (search, get_host, get_domain, etc.).
+    """
 
     def __init__(self, api_key: str) -> None:
         """Initialize the LeakIX client.
@@ -14,92 +18,29 @@ class LeakIXClient:
         Args:
             api_key: LeakIX API key for authentication.
         """
-        self._client = AsyncClient(api_key=api_key)
+        self.api = AsyncClient(api_key=api_key)
 
     async def close(self) -> None:
         """Close the HTTP client."""
-        await self._client.close()
+        await self.api.close()
 
-    async def search(
-        self,
-        query: str,
-        scope: str = "service",
-        page: int = 0,
-    ) -> list[Any]:
-        """Search LeakIX for services or leaks.
+    def _get_field(self, obj: Any, field: str) -> Any:
+        """Get field from object or dict."""
+        if obj is None:
+            return None
+        if isinstance(obj, dict):
+            return obj.get(field)
+        return getattr(obj, field, None)
 
-        Args:
-            query: Search query string.
-            scope: Either "service" or "leak".
-            page: Page number (0-indexed).
-
-        Returns:
-            List of L9Event results.
-        """
-        return await self._client.search(query, scope=scope, page=page)
-
-    async def get_host(self, ip: str) -> dict[str, list[Any]]:
-        """Get information about a specific IP address.
-
-        Args:
-            ip: IPv4 or IPv6 address.
-
-        Returns:
-            Dict with 'services' and 'leaks' lists.
-        """
-        return await self._client.get_host(ip)
-
-    async def get_domain(self, domain: str) -> dict[str, list[Any]]:
-        """Get information about a specific domain.
-
-        Args:
-            domain: Domain name.
-
-        Returns:
-            Dict with 'services' and 'leaks' lists.
-        """
-        return await self._client.get_domain(domain)
-
-    async def get_subdomains(self, domain: str) -> list[Any]:
-        """Get subdomains for a domain.
-
-        Args:
-            domain: Domain name.
-
-        Returns:
-            List of subdomain records.
-        """
-        return await self._client.get_subdomains(domain)
-
-    async def get_plugins(self) -> list[Any]:
-        """Get list of available plugins.
-
-        Returns:
-            List of plugin information.
-        """
-        return await self._client.get_plugins()
-
-    async def bulk_export(
-        self,
-        query: str,
-        max_results: int = 1000,
-    ) -> list[Any]:
-        """Bulk export leaks (Pro API feature).
-
-        Args:
-            query: Search query string.
-            max_results: Maximum number of results to return.
-
-        Returns:
-            List of aggregation results.
-        """
-        queries = [RawQuery(query)]
-        results: list[Any] = []
-        async for item in self._client.bulk_export_stream(queries):
-            results.append(item)
-            if len(results) >= max_results:
-                break
-        return results
+    def _is_ip(self, target: str) -> bool:
+        """Check if target is an IPv4 address."""
+        try:
+            parts = target.split(".")
+            return len(parts) == 4 and all(
+                p.isdigit() and 0 <= int(p) <= 255 for p in parts
+            )
+        except Exception:
+            return False
 
     async def quick_recon(self, target: str) -> dict[str, Any]:
         """Quick reconnaissance on a target (IP or domain).
@@ -112,24 +53,13 @@ class LeakIXClient:
         """
         results: dict[str, Any] = {"target": target, "type": "unknown"}
 
-        # Detect if target is IP or domain
-        is_ip = False
-        try:
-            parts = target.split(".")
-            if len(parts) == 4 and all(
-                p.isdigit() and 0 <= int(p) <= 255 for p in parts
-            ):
-                is_ip = True
-        except Exception:
-            pass
-
-        if is_ip:
+        if self._is_ip(target):
             results["type"] = "ip"
-            results["host"] = await self.get_host(target)
+            results["host"] = await self.api.get_host(target)
         else:
             results["type"] = "domain"
-            results["domain"] = await self.get_domain(target)
-            results["subdomains"] = await self.get_subdomains(target)
+            results["domain"] = await self.api.get_domain(target)
+            results["subdomains"] = await self.api.get_subdomains(target)
 
         return results
 
@@ -150,9 +80,9 @@ class LeakIXClient:
             ],
         }
 
-        # Test Pro by querying a Pro-only plugin (WpPlugin has data)
+        # Test Pro by querying a Pro-only plugin
         try:
-            result = await self.search("+plugin:WpPlugin", scope="leak", page=0)
+            result = await self.api.search("+plugin:WpUserEnumHttp", scope="leak", page=0)
             if result and len(result) > 0:
                 status["is_pro"] = True
                 status["features"].extend(["bulk_export", "pro_plugins"])
@@ -161,7 +91,7 @@ class LeakIXClient:
 
         # Get available plugins count
         try:
-            plugins = await self.get_plugins()
+            plugins = await self.api.get_plugins()
             status["plugins_count"] = len(plugins)
         except Exception:
             status["plugins_count"] = 0
@@ -193,23 +123,12 @@ class LeakIXClient:
             "risk_level": "unknown",
         }
 
-        # Detect target type and gather data
-        is_ip = False
-        try:
-            parts = target.split(".")
-            if len(parts) == 4 and all(
-                p.isdigit() and 0 <= int(p) <= 255 for p in parts
-            ):
-                is_ip = True
-        except Exception:
-            pass
-
-        if is_ip:
-            data = await self.get_host(target)
+        if self._is_ip(target):
+            data = await self.api.get_host(target)
         else:
-            data = await self.get_domain(target)
+            data = await self.api.get_domain(target)
             try:
-                report["subdomains"] = await self.get_subdomains(target)
+                report["subdomains"] = await self.api.get_subdomains(target)
             except Exception:
                 pass
 
@@ -223,14 +142,21 @@ class LeakIXClient:
         countries_seen: set[str] = set()
 
         for svc in services:
-            if hasattr(svc, "port"):
-                ports_seen.add(svc.port)
-            if hasattr(svc, "software") and svc.software:
-                if hasattr(svc.software, "name") and svc.software.name:
-                    technologies_seen.add(svc.software.name)
-            if hasattr(svc, "geoip") and svc.geoip:
-                if hasattr(svc.geoip, "country_name") and svc.geoip.country_name:
-                    countries_seen.add(svc.geoip.country_name)
+            port = self._get_field(svc, "port")
+            if port:
+                ports_seen.add(int(port) if isinstance(port, str) else port)
+            service = self._get_field(svc, "service")
+            if service:
+                software = self._get_field(service, "software")
+                if software:
+                    name = self._get_field(software, "name")
+                    if name:
+                        technologies_seen.add(name)
+            geoip = self._get_field(svc, "geoip")
+            if geoip:
+                country = self._get_field(geoip, "country_name")
+                if country:
+                    countries_seen.add(country)
 
         report["summary"]["exposed_ports"] = sorted(ports_seen)
         report["summary"]["technologies"] = sorted(technologies_seen)
@@ -244,12 +170,10 @@ class LeakIXClient:
         # Identify critical findings
         critical: list[str] = []
         for leak in leaks:
-            severity = None
-            if hasattr(leak, "leak") and leak.leak:
-                if hasattr(leak.leak, "severity"):
-                    severity = leak.leak.severity
+            leak_data = self._get_field(leak, "leak")
+            severity = self._get_field(leak_data, "severity") if leak_data else None
             if severity in ("critical", "high"):
-                plugin = getattr(leak, "event_source", None)
+                plugin = self._get_field(leak, "event_source")
                 if plugin:
                     critical.append(f"{severity}: {plugin}")
 
@@ -289,21 +213,10 @@ class LeakIXClient:
             "related": [],
         }
 
-        # First get info about the target
-        is_ip = False
-        try:
-            parts = target.split(".")
-            if len(parts) == 4 and all(
-                p.isdigit() and 0 <= int(p) <= 255 for p in parts
-            ):
-                is_ip = True
-        except Exception:
-            pass
-
-        if is_ip:
-            data = await self.get_host(target)
+        if self._is_ip(target):
+            data = await self.api.get_host(target)
         else:
-            data = await self.get_domain(target)
+            data = await self.api.get_domain(target)
 
         services = data.get("services") or []
         if not services:
@@ -313,38 +226,34 @@ class LeakIXClient:
 
         if relation_type == "technology":
             software_name = None
-            if hasattr(first_svc, "software") and first_svc.software:
-                if hasattr(first_svc.software, "name"):
-                    software_name = first_svc.software.name
+            for svc in services:
+                service = self._get_field(svc, "service")
+                software = self._get_field(service, "software") if service else None
+                software_name = self._get_field(software, "name") if software else None
+                if software_name:
+                    break
 
             if software_name:
-                query = f'+software.name:"{software_name}"'
+                query = f'+service.software.name:"{software_name}"'
                 results["search_query"] = query
-                related = await self.search(query, scope="service", page=0)
-                results["related"] = related
+                results["related"] = await self.api.search(query, scope="service", page=0)
 
         elif relation_type == "asn":
-            asn = None
-            if hasattr(first_svc, "network") and first_svc.network:
-                if hasattr(first_svc.network, "asn"):
-                    asn = first_svc.network.asn
+            network = self._get_field(first_svc, "network")
+            asn = self._get_field(network, "asn") if network else None
 
             if asn:
                 query = f"+asn:{asn}"
                 results["search_query"] = query
-                related = await self.search(query, scope="service", page=0)
-                results["related"] = related
+                results["related"] = await self.api.search(query, scope="service", page=0)
 
         elif relation_type == "network":
-            network = None
-            if hasattr(first_svc, "network") and first_svc.network:
-                if hasattr(first_svc.network, "network"):
-                    network = first_svc.network.network
+            network_obj = self._get_field(first_svc, "network")
+            network = self._get_field(network_obj, "network") if network_obj else None
 
             if network:
-                query = f'+network:"{network}"'
+                query = f'+network.network:"{network}"'
                 results["search_query"] = query
-                related = await self.search(query, scope="service", page=0)
-                results["related"] = related
+                results["related"] = await self.api.search(query, scope="service", page=0)
 
         return results
