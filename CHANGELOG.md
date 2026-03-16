@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support Python 3.11, 3.12, 3.13, and 3.14 ([f23cf81])
 - Migrate from Poetry to uv ([9d899b9])
 - Update dependabot to use uv package ecosystem ([935ea9d])
+- Move changelog check into its own workflow file ([changelog.yaml])
 
 ### Added
 

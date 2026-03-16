@@ -1,0 +1,32 @@
+name: CHANGELOG related checks per pull request
+
+on:
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  changelog-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check changelog commits
+        run: |
+          set -euo pipefail
+          for commit in $(git log --format=%H origin/${{ github.base_ref }}..HEAD); do
+              files=$(git diff-tree --no-commit-id --name-only -r "$commit")
+              if echo "$files" | grep -q "^CHANGELOG.md$"; then
+                  file_count=$(echo "$files" | wc -l | tr -d ' ')
+                  if [ "$file_count" -gt 1 ]; then
+                      echo "Error: Commit $commit modifies CHANGELOG.md with other files"
+                      echo "CHANGELOG.md changes must be in their own dedicated commit"
+                      exit 1
+                  fi
+              fi
+          done
+          echo "Changelog check passed"
