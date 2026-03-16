@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Upgrade l9format to 2.0.0, drop archived serde dependency ([4b8e300])
+
 ### Added
 
 - Initial release with MCP server implementation
@@ -18,3 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `list_plugins` tool for listing detection plugins
 - Automatic rate limit handling
 - GitHub Actions CI workflow
+
+<!-- Commit links -->
+[4b8e300]: https://github.com/LeakIX/leakix-mcp/commit/4b8e300
