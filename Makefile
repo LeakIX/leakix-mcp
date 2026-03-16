@@ -76,6 +76,10 @@ fix-trailing-whitespace: ## Remove trailing whitespaces from all files
 			_ {} \; && \
 		echo "Trailing whitespaces removed."
 
+.PHONY: lint-shell
+lint-shell: ## Lint shell scripts using shellcheck
+	shellcheck .github/scripts/*.sh
+
 .PHONY: check-trailing-whitespace
 check-trailing-whitespace: ## Check for trailing whitespaces in source files
 	@echo "Checking for trailing whitespaces..."

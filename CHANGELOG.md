@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support Python 3.11, 3.12, 3.13, and 3.14 ([f23cf81])
 - Migrate from Poetry to uv ([9d899b9])
 - Update dependabot to use uv package ecosystem ([935ea9d])
+- CI: use Makefile targets in workflows and add per-commit testing
+  ([8fe308e])
 
 ### Added
 
@@ -28,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI workflow
 
 <!-- Commit links -->
+[8fe308e]: https://github.com/LeakIX/leakix-mcp/commit/8fe308e
 [4b8e300]: https://github.com/LeakIX/leakix-mcp/commit/4b8e300
 [eea2081]: https://github.com/LeakIX/leakix-mcp/commit/eea2081
 [f23cf81]: https://github.com/LeakIX/leakix-mcp/commit/f23cf81
