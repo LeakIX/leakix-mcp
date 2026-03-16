@@ -181,10 +181,64 @@ class TestParseL9Event:
 
     def test_parse_l9event_with_minimal_data(self) -> None:
         """Test parsing with minimal data returns something usable."""
-        minimal = {"event_type": "service", "ip": "1.2.3.4"}
+        minimal = {
+            "event_type": "service",
+            "event_source": "",
+            "ip": "1.2.3.4",
+            "port": "80",
+            "host": "",
+            "reverse": "",
+            "protocol": "",
+            "summary": "",
+            "time": "2026-01-01T00:00:00Z",
+            "http": {
+                "root": "",
+                "url": "",
+                "status": 0,
+                "length": 0,
+                "header": {},
+                "title": "",
+                "favicon_hash": "",
+            },
+            "ssh": {
+                "fingerprint": "",
+                "version": 0,
+                "banner": "",
+                "motd": "",
+            },
+            "service": {
+                "credentials": {
+                    "noauth": False,
+                    "username": "",
+                    "password": "",
+                    "key": "",
+                },
+                "software": {
+                    "name": "",
+                    "version": "",
+                    "os": "",
+                    "fingerprint": "",
+                },
+            },
+            "geoip": {
+                "continent_name": "",
+                "country_name": "",
+                "country_iso_code": "",
+                "city_name": "",
+                "region_name": "",
+                "region_iso_code": "",
+                "location": {"lat": "0", "lon": "0"},
+            },
+            "network": {
+                "organization_name": "",
+                "asn": 0,
+                "network": "",
+            },
+        }
         result = parse_l9event(minimal)
         assert result is not None
-        assert isinstance(result, (dict, l9format.L9Event))
+        assert isinstance(result, l9format.L9Event)
+        assert result.ip == "1.2.3.4"
 
     def test_parse_l9events_list(self) -> None:
         """Test parsing a list of events."""
