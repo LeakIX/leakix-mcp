@@ -225,12 +225,12 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         elif name == "list_subdomains":
             domain = arguments["domain"]
-            results = await client.get_subdomains(domain)
-            return [TextContent(type="text", text=format_result(results))]
+            subdomains = await client.get_subdomains(domain)
+            return [TextContent(type="text", text=format_result(subdomains))]
 
         elif name == "list_plugins":
-            results = await client.get_plugins()
-            return [TextContent(type="text", text=format_result(results))]
+            plugins = await client.get_plugins()
+            return [TextContent(type="text", text=format_result(plugins))]
 
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]

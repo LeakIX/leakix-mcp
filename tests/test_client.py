@@ -1,10 +1,12 @@
 """Tests for the LeakIX client."""
 
 import json
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from l9format import l9format
 
 from leakix_mcp.client import LeakIXClient, parse_l9event, parse_l9events
 
@@ -152,7 +154,7 @@ SAMPLE_PLUGIN = {
 
 def make_response(
     status_code: int,
-    json_data: dict | list | None = None,
+    json_data: dict[str, Any] | list[Any] | None = None,
     headers: dict[str, str] | None = None,
 ) -> httpx.Response:
     """Create an httpx.Response with a mock request."""
@@ -175,22 +177,15 @@ class TestParseL9Event:
     def test_parse_l9event_with_valid_data(self) -> None:
         """Test parsing a valid l9event dict."""
         result = parse_l9event(SAMPLE_SERVICE_EVENT)
-        # Should return either L9Event or dict
-        assert result is not None
+        assert isinstance(result, l9format.L9Event)
+        assert result.ip == "192.168.1.1"
 
     def test_parse_l9event_with_minimal_data(self) -> None:
-        """Test parsing with minimal data returns something usable."""
+        """Test parsing with incomplete data falls back to dict."""
         minimal = {"event_type": "service", "ip": "1.2.3.4"}
         result = parse_l9event(minimal)
-        # Should return either L9Event or dict depending on l9format behavior
-        assert result is not None
-        # Access ip via dict key or to_dict()
-        if isinstance(result, dict):
-            assert result["ip"] == "1.2.3.4"
-        else:
-            # L9Event uses to_dict() for serialization
-            data = result.to_dict()
-            assert data["ip"] == "1.2.3.4"
+        assert isinstance(result, dict)
+        assert result["ip"] == "1.2.3.4"
 
     def test_parse_l9events_list(self) -> None:
         """Test parsing a list of events."""

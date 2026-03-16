@@ -20,7 +20,8 @@ def parse_l9event(data: dict[str, Any]) -> l9format.L9Event | dict[str, Any]:
         Parsed L9Event or original dict if parsing fails.
     """
     try:
-        return l9format.L9Event.from_dict(data)
+        event: l9format.L9Event = l9format.L9Event.from_dict(data)  # type: ignore[assignment]
+        return event
     except Exception as e:
         logger.debug("Failed to parse L9Event: %s", e)
         return data
