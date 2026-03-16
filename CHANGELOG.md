@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump ruff from 0.14.14 to 0.15.5 ([eea2081])
 - Support Python 3.11, 3.12, 3.13, and 3.14 ([f23cf81])
 - Migrate from Poetry to uv ([9d899b9])
+- Update dependabot to use uv package ecosystem ([935ea9d])
 
 ### Added
 
@@ -31,3 +32,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [eea2081]: https://github.com/LeakIX/leakix-mcp/commit/eea2081
 [f23cf81]: https://github.com/LeakIX/leakix-mcp/commit/f23cf81
 [9d899b9]: https://github.com/LeakIX/leakix-mcp/commit/9d899b9
+[935ea9d]: https://github.com/LeakIX/leakix-mcp/commit/935ea9d
