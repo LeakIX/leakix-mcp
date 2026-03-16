@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Upgrade l9format to 2.0.0, drop archived serde dependency ([4b8e300])
+- Bump ruff from 0.14.14 to 0.15.5 ([eea2081])
 
 ### Added
 
@@ -25,3 +26,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Commit links -->
 [4b8e300]: https://github.com/LeakIX/leakix-mcp/commit/4b8e300
+[eea2081]: https://github.com/LeakIX/leakix-mcp/commit/eea2081
