@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update dependabot to use uv package ecosystem ([935ea9d])
 - CI: use Makefile targets in workflows and add per-commit testing
   ([8fe308e])
+- Move changelog check into own workflow with external script,
+  add shellcheck workflow ([d24c894])
 
 ### Added
 
@@ -30,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI workflow
 
 <!-- Commit links -->
+[d24c894]: https://github.com/LeakIX/leakix-mcp/commit/d24c894
 [8fe308e]: https://github.com/LeakIX/leakix-mcp/commit/8fe308e
 [4b8e300]: https://github.com/LeakIX/leakix-mcp/commit/4b8e300
 [eea2081]: https://github.com/LeakIX/leakix-mcp/commit/eea2081
