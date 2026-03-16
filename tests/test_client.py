@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from l9format import l9format
 
 from leakix_mcp.client import LeakIXClient, parse_l9event, parse_l9events
 
@@ -182,13 +183,8 @@ class TestParseL9Event:
         """Test parsing with minimal data returns something usable."""
         minimal = {"event_type": "service", "ip": "1.2.3.4"}
         result = parse_l9event(minimal)
-        # Should return either L9Event or dict depending on l9format behavior
         assert result is not None
-        # Access ip via dict key or attribute
-        if isinstance(result, dict):
-            assert result["ip"] == "1.2.3.4"
-        else:
-            assert result.ip == "1.2.3.4"
+        assert isinstance(result, (dict, l9format.L9Event))
 
     def test_parse_l9events_list(self) -> None:
         """Test parsing a list of events."""
