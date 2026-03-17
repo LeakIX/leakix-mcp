@@ -1,68 +1,31 @@
-"""Tests for the LeakIX client."""
+"""Tests for the LeakIX MCP client."""
 
-from __future__ import annotations
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import json
-from typing import Any
-from unittest.mock import AsyncMock, patch
-
-import httpx
 import pytest
-from l9format import l9format
 
-from leakix_mcp.client import LeakIXClient, parse_l9event, parse_l9events
+from leakix_mcp.client import LeakIXClient
 
-# Sample API response data (based on l9format schema)
+# Sample API response data
 SAMPLE_SERVICE_EVENT = {
     "event_type": "service",
     "event_source": "HttpPlugin",
-    "event_pipeline": ["l9scan"],
-    "event_fingerprint": "abc123",
     "ip": "192.168.1.1",
     "port": "80",
     "host": "example.com",
-    "reverse": "example.com",
     "protocol": "http",
-    "transport": ["tcp"],
     "summary": "HTTP Server",
     "time": "2026-01-15T10:30:00Z",
-    "http": {
-        "root": "/",
-        "url": "http://example.com/",
-        "status": 200,
-        "length": 1234,
-        "header": {"Server": "nginx"},
-        "title": "Example Domain",
-        "favicon_hash": "",
-    },
-    "ssh": {
-        "fingerprint": "",
-        "version": 0,
-        "banner": "",
-        "motd": "",
-    },
     "service": {
-        "credentials": {
-            "noauth": False,
-            "username": "",
-            "password": "",
-            "key": "",
-        },
         "software": {
             "name": "nginx",
             "version": "1.18.0",
             "os": "Linux",
-            "fingerprint": "",
         },
     },
     "geoip": {
-        "continent_name": "North America",
         "country_name": "United States",
         "country_iso_code": "US",
-        "city_name": "New York",
-        "region_name": "New York",
-        "region_iso_code": "NY",
-        "location": {"lat": "40.7128", "lon": "-74.0060"},
     },
     "network": {
         "organization_name": "Example ISP",
@@ -74,70 +37,16 @@ SAMPLE_SERVICE_EVENT = {
 SAMPLE_LEAK_EVENT = {
     "event_type": "leak",
     "event_source": "GitConfigHttpPlugin",
-    "event_pipeline": ["l9scan"],
-    "event_fingerprint": "def456",
     "ip": "10.0.0.1",
     "port": "443",
     "host": "leaked.example.com",
-    "reverse": "leaked.example.com",
     "protocol": "https",
-    "transport": ["tcp", "tls"],
     "summary": "Exposed Git configuration",
     "time": "2026-01-15T11:00:00Z",
-    "http": {
-        "root": "/",
-        "url": "https://leaked.example.com/.git/config",
-        "status": 200,
-        "length": 512,
-        "header": {},
-        "title": "",
-        "favicon_hash": "",
-    },
-    "ssh": {
-        "fingerprint": "",
-        "version": 0,
-        "banner": "",
-        "motd": "",
-    },
-    "service": {
-        "credentials": {
-            "noauth": False,
-            "username": "",
-            "password": "",
-            "key": "",
-        },
-        "software": {
-            "name": "Apache",
-            "version": "2.4",
-            "os": "Linux",
-            "fingerprint": "",
-        },
-    },
     "leak": {
         "stage": "open",
         "type": "config_leak",
         "severity": "high",
-        "dataset": {
-            "rows": 0,
-            "files": 1,
-            "size": 512,
-            "collections": 0,
-            "infected": False,
-        },
-    },
-    "geoip": {
-        "continent_name": "Europe",
-        "country_name": "Germany",
-        "country_iso_code": "DE",
-        "city_name": "Berlin",
-        "region_name": "Berlin",
-        "region_iso_code": "BE",
-        "location": {"lat": "52.5200", "lon": "13.4050"},
-    },
-    "network": {
-        "organization_name": "Example Hosting",
-        "asn": 54321,
-        "network": "10.0.0.0/8",
     },
 }
 
@@ -150,227 +59,216 @@ SAMPLE_SUBDOMAIN = {
 SAMPLE_PLUGIN = {
     "name": "HttpPlugin",
     "description": "HTTP service detection",
-    "version": "1.0.0",
 }
 
 
-def make_response(
-    status_code: int,
-    json_data: dict[str, Any] | list[Any] | None = None,
-    headers: dict[str, str] | None = None,
-) -> httpx.Response:
-    """Create an httpx.Response with a mock request."""
-    request = httpx.Request("GET", "https://leakix.net/test")
-    content = b""
-    if json_data is not None:
-        content = json.dumps(json_data).encode()
-    response = httpx.Response(
-        status_code=status_code,
-        request=request,
-        headers=headers or {},
-        content=content,
-    )
-    return response
+def _mock_response(data: object) -> MagicMock:
+    """Create a mock AbstractResponse that behaves like SuccessResponse."""
+    resp = MagicMock()
+    resp.is_success.return_value = True
+    resp.is_error.return_value = False
+    resp.json.return_value = data
+    resp.status_code.return_value = 200
+    return resp
 
 
-class TestParseL9Event:
-    """Tests for l9event parsing functions."""
+class TestLeakIXClientHelpers:
+    """Tests for LeakIXClient helper methods."""
 
-    def test_parse_l9event_with_valid_data(self) -> None:
-        """Test parsing a valid l9event dict."""
-        result = parse_l9event(SAMPLE_SERVICE_EVENT)
-        assert isinstance(result, l9format.L9Event)
-        assert result.ip == "192.168.1.1"
+    def test_is_ip_valid(self) -> None:
+        client = LeakIXClient(api_key="test")
+        assert client._is_ip("192.168.1.1") is True
+        assert client._is_ip("0.0.0.0") is True
+        assert client._is_ip("255.255.255.255") is True
 
-    def test_parse_l9event_with_minimal_data(self) -> None:
-        """Test parsing with incomplete data falls back to dict."""
-        minimal = {"event_type": "service", "ip": "1.2.3.4"}
-        result = parse_l9event(minimal)
-        assert isinstance(result, dict)
-        assert result["ip"] == "1.2.3.4"
+    def test_is_ip_invalid(self) -> None:
+        client = LeakIXClient(api_key="test")
+        assert client._is_ip("example.com") is False
+        assert client._is_ip("256.1.1.1") is False
+        assert client._is_ip("1.2.3") is False
+        assert client._is_ip("") is False
 
-    def test_parse_l9events_list(self) -> None:
-        """Test parsing a list of events."""
-        events = [SAMPLE_SERVICE_EVENT, SAMPLE_LEAK_EVENT]
-        results = parse_l9events(events)
-        assert len(results) == 2
+    def test_get_field_dict(self) -> None:
+        client = LeakIXClient(api_key="test")
+        assert client._get_field({"name": "nginx"}, "name") == "nginx"
+        assert client._get_field({"name": "nginx"}, "version") is None
+
+    def test_get_field_none(self) -> None:
+        client = LeakIXClient(api_key="test")
+        assert client._get_field(None, "name") is None
 
 
 class TestLeakIXClient:
-    """Tests for the LeakIX API client."""
+    """Tests for the LeakIX API client methods."""
 
     @pytest.fixture
     def client(self) -> LeakIXClient:
-        """Create a test client."""
         return LeakIXClient(api_key="test-api-key")
 
     @pytest.mark.asyncio
-    async def test_search_services(self, client: LeakIXClient) -> None:
-        """Test searching for services."""
-        mock_response = make_response(200, [SAMPLE_SERVICE_EVENT])
+    async def test_quick_recon_ip(self, client: LeakIXClient) -> None:
+        """Test quick recon on an IP address."""
+        mock_host_data = {
+            "services": [SAMPLE_SERVICE_EVENT],
+            "leaks": [],
+        }
 
         with patch.object(
-            client, "_get_client", new_callable=AsyncMock
-        ) as mock_get:
-            mock_http_client = AsyncMock()
-            mock_http_client.request = AsyncMock(return_value=mock_response)
-            mock_get.return_value = mock_http_client
+            client.api, "get_host", new_callable=AsyncMock
+        ) as mock:
+            mock.return_value = _mock_response(mock_host_data)
+            result = await client.quick_recon("192.168.1.1")
 
-            results = await client.search("+port:80", scope="service")
-
-            assert len(results) == 1
-            mock_http_client.request.assert_called_once()
+        assert result["type"] == "ip"
+        assert result["host"] == mock_host_data
 
     @pytest.mark.asyncio
-    async def test_search_leaks(self, client: LeakIXClient) -> None:
-        """Test searching for leaks."""
-        mock_response = make_response(200, [SAMPLE_LEAK_EVENT])
+    async def test_quick_recon_domain(self, client: LeakIXClient) -> None:
+        """Test quick recon on a domain."""
+        mock_domain_data = {
+            "services": [SAMPLE_SERVICE_EVENT],
+            "leaks": [SAMPLE_LEAK_EVENT],
+        }
 
-        with patch.object(
-            client, "_get_client", new_callable=AsyncMock
-        ) as mock_get:
-            mock_http_client = AsyncMock()
-            mock_http_client.request = AsyncMock(return_value=mock_response)
-            mock_get.return_value = mock_http_client
+        with (
+            patch.object(
+                client.api,
+                "get_domain",
+                new_callable=AsyncMock,
+            ) as mock_domain,
+            patch.object(
+                client.api,
+                "get_subdomains",
+                new_callable=AsyncMock,
+            ) as mock_subs,
+        ):
+            mock_domain.return_value = _mock_response(mock_domain_data)
+            mock_subs.return_value = _mock_response([SAMPLE_SUBDOMAIN])
+            result = await client.quick_recon("example.com")
 
-            results = await client.search("+leak.severity:high", scope="leak")
-
-            assert len(results) == 1
-            mock_http_client.request.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_get_host(self, client: LeakIXClient) -> None:
-        """Test getting host information."""
-        mock_response = make_response(
-            200,
-            {"Services": [SAMPLE_SERVICE_EVENT], "Leaks": []},
-        )
-
-        with patch.object(
-            client, "_get_client", new_callable=AsyncMock
-        ) as mock_get:
-            mock_http_client = AsyncMock()
-            mock_http_client.request = AsyncMock(return_value=mock_response)
-            mock_get.return_value = mock_http_client
-
-            result = await client.get_host("192.168.1.1")
-
-            assert "Services" in result
-            assert "Leaks" in result
-            assert len(result["Services"]) == 1
+        assert result["type"] == "domain"
+        assert result["domain"] == mock_domain_data
+        assert len(result["subdomains"]) == 1
 
     @pytest.mark.asyncio
-    async def test_get_domain(self, client: LeakIXClient) -> None:
-        """Test getting domain information."""
-        mock_response = make_response(
-            200,
-            {"Services": [SAMPLE_SERVICE_EVENT], "Leaks": [SAMPLE_LEAK_EVENT]},
-        )
+    async def test_exposure_report_ip(self, client: LeakIXClient) -> None:
+        """Test exposure report for an IP."""
+        mock_data = {
+            "services": [SAMPLE_SERVICE_EVENT],
+            "leaks": [SAMPLE_LEAK_EVENT],
+        }
 
         with patch.object(
-            client, "_get_client", new_callable=AsyncMock
-        ) as mock_get:
-            mock_http_client = AsyncMock()
-            mock_http_client.request = AsyncMock(return_value=mock_response)
-            mock_get.return_value = mock_http_client
+            client.api, "get_host", new_callable=AsyncMock
+        ) as mock:
+            mock.return_value = _mock_response(mock_data)
+            report = await client.exposure_report("192.168.1.1")
 
-            result = await client.get_domain("example.com")
-
-            assert len(result["Services"]) == 1
-            assert len(result["Leaks"]) == 1
+        assert report["target"] == "192.168.1.1"
+        assert report["summary"]["total_services"] == 1
+        assert report["summary"]["total_leaks"] == 1
+        assert 80 in report["summary"]["exposed_ports"]
+        assert "nginx" in report["summary"]["technologies"]
+        assert "United States" in report["summary"]["countries"]
+        assert len(report["summary"]["critical_findings"]) == 1
+        assert report["risk_level"] == "critical"
 
     @pytest.mark.asyncio
-    async def test_get_subdomains(self, client: LeakIXClient) -> None:
-        """Test getting subdomains."""
-        mock_response = make_response(200, [SAMPLE_SUBDOMAIN])
+    async def test_exposure_report_no_leaks(self, client: LeakIXClient) -> None:
+        """Test exposure report with no leaks gives low risk."""
+        mock_data = {
+            "services": [SAMPLE_SERVICE_EVENT],
+            "leaks": [],
+        }
 
         with patch.object(
-            client, "_get_client", new_callable=AsyncMock
-        ) as mock_get:
-            mock_http_client = AsyncMock()
-            mock_http_client.request = AsyncMock(return_value=mock_response)
-            mock_get.return_value = mock_http_client
+            client.api, "get_host", new_callable=AsyncMock
+        ) as mock:
+            mock.return_value = _mock_response(mock_data)
+            report = await client.exposure_report("192.168.1.1")
 
-            results = await client.get_subdomains("example.com")
-
-            assert len(results) == 1
-            assert results[0]["subdomain"] == "api.example.com"
+        assert report["risk_level"] == "minimal"
+        assert report["summary"]["total_leaks"] == 0
 
     @pytest.mark.asyncio
-    async def test_get_plugins(self, client: LeakIXClient) -> None:
-        """Test getting available plugins."""
-        mock_response = make_response(200, [SAMPLE_PLUGIN])
+    async def test_exposure_report_empty(self, client: LeakIXClient) -> None:
+        """Test exposure report with no data."""
+        mock_data = {"services": [], "leaks": []}
 
         with patch.object(
-            client, "_get_client", new_callable=AsyncMock
-        ) as mock_get:
-            mock_http_client = AsyncMock()
-            mock_http_client.request = AsyncMock(return_value=mock_response)
-            mock_get.return_value = mock_http_client
+            client.api, "get_host", new_callable=AsyncMock
+        ) as mock:
+            mock.return_value = _mock_response(mock_data)
+            report = await client.exposure_report("10.0.0.1")
 
-            results = await client.get_plugins()
-
-            assert len(results) == 1
-            assert results[0]["name"] == "HttpPlugin"
+        assert report["risk_level"] == "minimal"
+        assert report["summary"]["total_services"] == 0
 
     @pytest.mark.asyncio
-    async def test_rate_limit_handling(self, client: LeakIXClient) -> None:
-        """Test that rate limiting is handled."""
-        rate_limited = make_response(
-            429,
-            None,
-            headers={"x-limited-for": "100"},
-        )
-        success = make_response(200, [SAMPLE_SERVICE_EVENT])
+    async def test_find_related_technology(self, client: LeakIXClient) -> None:
+        """Test finding related targets by technology."""
+        mock_data = {
+            "services": [SAMPLE_SERVICE_EVENT],
+            "leaks": [],
+        }
+        mock_search_results = [SAMPLE_SERVICE_EVENT]
 
-        with patch.object(
-            client, "_get_client", new_callable=AsyncMock
-        ) as mock_get:
-            mock_http_client = AsyncMock()
-            mock_http_client.request = AsyncMock(
-                side_effect=[rate_limited, success]
-            )
-            mock_get.return_value = mock_http_client
+        with (
+            patch.object(
+                client.api,
+                "get_host",
+                new_callable=AsyncMock,
+            ) as mock_host,
+            patch.object(
+                client.api,
+                "search",
+                new_callable=AsyncMock,
+            ) as mock_search,
+        ):
+            mock_host.return_value = _mock_response(mock_data)
+            mock_search.return_value = _mock_response(mock_search_results)
+            result = await client.find_related("192.168.1.1", "technology")
 
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                results = await client.search("+port:80")
-
-            assert len(results) == 1
-            # Should have been called twice due to rate limiting
-            assert mock_http_client.request.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_empty_response_handling(self, client: LeakIXClient) -> None:
-        """Test handling of empty responses."""
-        mock_response = make_response(200, [])
-
-        with patch.object(
-            client, "_get_client", new_callable=AsyncMock
-        ) as mock_get:
-            mock_http_client = AsyncMock()
-            mock_http_client.request = AsyncMock(return_value=mock_response)
-            mock_get.return_value = mock_http_client
-
-            results = await client.search("+nonexistent:query")
-
-            assert results == []
+        assert result["relation_type"] == "technology"
+        assert len(result["related"]) == 1
+        assert "nginx" in result["search_query"]
 
     @pytest.mark.asyncio
-    async def test_null_services_and_leaks(self, client: LeakIXClient) -> None:
-        """Test handling of null Services/Leaks in host response."""
-        mock_response = make_response(
-            200,
-            {"Services": None, "Leaks": None},
-        )
+    async def test_find_related_asn(self, client: LeakIXClient) -> None:
+        """Test finding related targets by ASN."""
+        mock_data = {
+            "services": [SAMPLE_SERVICE_EVENT],
+            "leaks": [],
+        }
+
+        with (
+            patch.object(
+                client.api,
+                "get_host",
+                new_callable=AsyncMock,
+            ) as mock_host,
+            patch.object(
+                client.api,
+                "search",
+                new_callable=AsyncMock,
+            ) as mock_search,
+        ):
+            mock_host.return_value = _mock_response(mock_data)
+            mock_search.return_value = _mock_response([])
+            result = await client.find_related("192.168.1.1", "asn")
+
+        assert result["relation_type"] == "asn"
+        assert "12345" in result["search_query"]
+
+    @pytest.mark.asyncio
+    async def test_find_related_no_services(self, client: LeakIXClient) -> None:
+        """Test finding related with no services returns empty."""
+        mock_data = {"services": [], "leaks": []}
 
         with patch.object(
-            client, "_get_client", new_callable=AsyncMock
-        ) as mock_get:
-            mock_http_client = AsyncMock()
-            mock_http_client.request = AsyncMock(return_value=mock_response)
-            mock_get.return_value = mock_http_client
+            client.api, "get_host", new_callable=AsyncMock
+        ) as mock:
+            mock.return_value = _mock_response(mock_data)
+            result = await client.find_related("192.168.1.1")
 
-            result = await client.get_host("192.168.1.1")
-
-            assert result["Services"] == []
-            assert result["Leaks"] == []
+        assert result["related"] == []

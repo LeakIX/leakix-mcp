@@ -1,10 +1,13 @@
 [project]
 name = "leakix-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server for LeakIX API - security research and reconnaissance"
 readme = "README.md"
 license = "MIT"
-authors = [{ name = "LeakIX", email = "support@leakix.net" }]
+authors = [
+    { name = "LeakIX", email = "support@leakix.net" },
+    { name = "Valentin Lobstein", email = "valentin@leakix.net" },
+]
 keywords = ["mcp", "leakix", "security", "reconnaissance"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -19,9 +22,8 @@ classifiers = [
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.26.0",
-    "httpx>=0.28.1",
     "pydantic>=2.12.5",
-    "l9format>=2.0.0",
+    "leakix @ git+https://github.com/LeakIX/LeakIXClient-Python.git@feat/async-client-search-api",
 ]
 
 [project.scripts]
@@ -38,6 +40,9 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/leakix_mcp"]
