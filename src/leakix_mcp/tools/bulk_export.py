@@ -2,10 +2,8 @@
 
 from typing import Any
 
-from leakix import RawQuery
+from leakix import AsyncClient, RawQuery
 from mcp.types import Tool
-
-from ..client import LeakIXClient
 
 TOOL = Tool(
     name="bulk_export",
@@ -32,8 +30,8 @@ TOOL = Tool(
 )
 
 
-async def handle(client: LeakIXClient, arguments: dict[str, Any]) -> Any:
+async def handle(client: AsyncClient, arguments: dict[str, Any]) -> Any:
     """Handle bulk_export tool call."""
     query = arguments["query"]
-    r = await client.api.bulk_export(queries=[RawQuery(query)])
+    r = await client.bulk_export(queries=[RawQuery(query)])
     return r.json() if r.is_success() else []

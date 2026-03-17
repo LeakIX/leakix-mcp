@@ -2,9 +2,8 @@
 
 from typing import Any
 
+from leakix import AsyncClient
 from mcp.types import Tool
-
-from ..client import LeakIXClient
 
 TOOL = Tool(
     name="host_lookup",
@@ -27,8 +26,8 @@ TOOL = Tool(
 )
 
 
-async def handle(client: LeakIXClient, arguments: dict[str, Any]) -> Any:
+async def handle(client: AsyncClient, arguments: dict[str, Any]) -> Any:
     """Handle host_lookup tool call."""
     ip = arguments["ip"]
-    r = await client.api.get_host(ip)
+    r = await client.get_host(ip)
     return r.json() if r.is_success() else {}

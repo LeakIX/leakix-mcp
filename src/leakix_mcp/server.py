@@ -5,19 +5,19 @@ import os
 import sys
 from typing import Any
 
+from leakix import AsyncClient
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
-from .client import LeakIXClient
 from .tools import dispatch, get_tools
 
 server = Server("leakix-mcp")
 
-_client: LeakIXClient | None = None
+_client: AsyncClient | None = None
 
 
-def get_client() -> LeakIXClient:
+def get_client() -> AsyncClient:
     """Get or create the LeakIX client."""
     global _client
     if _client is None:
@@ -27,7 +27,7 @@ def get_client() -> LeakIXClient:
                 "LEAKIX_API_KEY environment variable is required. "
                 "Get your API key from https://leakix.net/settings"
             )
-        _client = LeakIXClient(api_key)
+        _client = AsyncClient(api_key=api_key)
     return _client
 
 

@@ -1,12 +1,16 @@
-"""Tests for the LeakIX MCP client."""
+"""Tests for the LeakIX MCP tools."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from leakix_mcp.client import LeakIXClient
+from leakix_mcp.tools import (
+    exposure_report,
+    find_related,
+    helpers,
+    quick_recon,
+)
 
-# Sample API response data
 SAMPLE_SERVICE_EVENT = {
     "event_type": "service",
     "event_source": "HttpPlugin",
@@ -56,114 +60,87 @@ SAMPLE_SUBDOMAIN = {
     "last_seen": "2026-01-15T12:00:00Z",
 }
 
-SAMPLE_PLUGIN = {
-    "name": "HttpPlugin",
-    "description": "HTTP service detection",
-}
-
 
 def _mock_response(data: object) -> MagicMock:
-    """Create a mock AbstractResponse that behaves like SuccessResponse."""
+    """Create a mock AbstractResponse."""
     resp = MagicMock()
     resp.is_success.return_value = True
-    resp.is_error.return_value = False
     resp.json.return_value = data
-    resp.status_code.return_value = 200
     return resp
 
 
-class TestLeakIXClientHelpers:
-    """Tests for LeakIXClient helper methods."""
+def _mock_client(**methods: AsyncMock) -> MagicMock:
+    """Create a mock AsyncClient with async methods."""
+    client = MagicMock()
+    for name, mock in methods.items():
+        setattr(client, name, mock)
+    return client
+
+
+class TestHelpers:
+    """Tests for helper functions."""
 
     def test_is_ip_valid(self) -> None:
-        client = LeakIXClient(api_key="test")
-        assert client._is_ip("192.168.1.1") is True
-        assert client._is_ip("0.0.0.0") is True
-        assert client._is_ip("255.255.255.255") is True
+        assert helpers.is_ip("192.168.1.1") is True
+        assert helpers.is_ip("0.0.0.0") is True
+        assert helpers.is_ip("255.255.255.255") is True
 
     def test_is_ip_invalid(self) -> None:
-        client = LeakIXClient(api_key="test")
-        assert client._is_ip("example.com") is False
-        assert client._is_ip("256.1.1.1") is False
-        assert client._is_ip("1.2.3") is False
-        assert client._is_ip("") is False
+        assert helpers.is_ip("example.com") is False
+        assert helpers.is_ip("256.1.1.1") is False
+        assert helpers.is_ip("1.2.3") is False
+        assert helpers.is_ip("") is False
 
     def test_get_field_dict(self) -> None:
-        client = LeakIXClient(api_key="test")
-        assert client._get_field({"name": "nginx"}, "name") == "nginx"
-        assert client._get_field({"name": "nginx"}, "version") is None
+        assert helpers.get_field({"name": "nginx"}, "name") == "nginx"
+        assert helpers.get_field({"name": "nginx"}, "version") is None
 
     def test_get_field_none(self) -> None:
-        client = LeakIXClient(api_key="test")
-        assert client._get_field(None, "name") is None
+        assert helpers.get_field(None, "name") is None
 
 
-class TestLeakIXClient:
-    """Tests for the LeakIX API client methods."""
-
-    @pytest.fixture
-    def client(self) -> LeakIXClient:
-        return LeakIXClient(api_key="test-api-key")
+class TestTools:
+    """Tests for MCP tool handlers."""
 
     @pytest.mark.asyncio
-    async def test_quick_recon_ip(self, client: LeakIXClient) -> None:
-        """Test quick recon on an IP address."""
-        mock_host_data = {
-            "services": [SAMPLE_SERVICE_EVENT],
-            "leaks": [],
-        }
-
-        with patch.object(
-            client.api, "get_host", new_callable=AsyncMock
-        ) as mock:
-            mock.return_value = _mock_response(mock_host_data)
-            result = await client.quick_recon("192.168.1.1")
-
+    async def test_quick_recon_ip(self) -> None:
+        mock_host = AsyncMock(
+            return_value=_mock_response(
+                {"services": [SAMPLE_SERVICE_EVENT], "leaks": []}
+            )
+        )
+        client = _mock_client(get_host=mock_host)
+        result = await quick_recon.handle(client, {"target": "192.168.1.1"})
         assert result["type"] == "ip"
-        assert result["host"] == mock_host_data
+        assert result["host"]["services"][0]["ip"] == "192.168.1.1"
 
     @pytest.mark.asyncio
-    async def test_quick_recon_domain(self, client: LeakIXClient) -> None:
-        """Test quick recon on a domain."""
+    async def test_quick_recon_domain(self) -> None:
         mock_domain_data = {
             "services": [SAMPLE_SERVICE_EVENT],
             "leaks": [SAMPLE_LEAK_EVENT],
         }
-
-        with (
-            patch.object(
-                client.api,
-                "get_domain",
-                new_callable=AsyncMock,
-            ) as mock_domain,
-            patch.object(
-                client.api,
-                "get_subdomains",
-                new_callable=AsyncMock,
-            ) as mock_subs,
-        ):
-            mock_domain.return_value = _mock_response(mock_domain_data)
-            mock_subs.return_value = _mock_response([SAMPLE_SUBDOMAIN])
-            result = await client.quick_recon("example.com")
-
+        client = _mock_client(
+            get_domain=AsyncMock(return_value=_mock_response(mock_domain_data)),
+            get_subdomains=AsyncMock(
+                return_value=_mock_response([SAMPLE_SUBDOMAIN])
+            ),
+        )
+        result = await quick_recon.handle(client, {"target": "example.com"})
         assert result["type"] == "domain"
         assert result["domain"] == mock_domain_data
         assert len(result["subdomains"]) == 1
 
     @pytest.mark.asyncio
-    async def test_exposure_report_ip(self, client: LeakIXClient) -> None:
-        """Test exposure report for an IP."""
+    async def test_exposure_report_ip(self) -> None:
         mock_data = {
             "services": [SAMPLE_SERVICE_EVENT],
             "leaks": [SAMPLE_LEAK_EVENT],
         }
-
-        with patch.object(
-            client.api, "get_host", new_callable=AsyncMock
-        ) as mock:
-            mock.return_value = _mock_response(mock_data)
-            report = await client.exposure_report("192.168.1.1")
-
+        client = _mock_client(
+            get_host=AsyncMock(return_value=_mock_response(mock_data))
+        )
+        report = await exposure_report.handle(client, {"target": "192.168.1.1"})
         assert report["target"] == "192.168.1.1"
         assert report["summary"]["total_services"] == 1
         assert report["summary"]["total_leaks"] == 1
@@ -174,101 +151,68 @@ class TestLeakIXClient:
         assert report["risk_level"] == "critical"
 
     @pytest.mark.asyncio
-    async def test_exposure_report_no_leaks(self, client: LeakIXClient) -> None:
-        """Test exposure report with no leaks gives low risk."""
+    async def test_exposure_report_no_leaks(self) -> None:
         mock_data = {
             "services": [SAMPLE_SERVICE_EVENT],
             "leaks": [],
         }
-
-        with patch.object(
-            client.api, "get_host", new_callable=AsyncMock
-        ) as mock:
-            mock.return_value = _mock_response(mock_data)
-            report = await client.exposure_report("192.168.1.1")
-
+        client = _mock_client(
+            get_host=AsyncMock(return_value=_mock_response(mock_data))
+        )
+        report = await exposure_report.handle(client, {"target": "192.168.1.1"})
         assert report["risk_level"] == "minimal"
         assert report["summary"]["total_leaks"] == 0
 
     @pytest.mark.asyncio
-    async def test_exposure_report_empty(self, client: LeakIXClient) -> None:
-        """Test exposure report with no data."""
+    async def test_exposure_report_empty(self) -> None:
         mock_data = {"services": [], "leaks": []}
-
-        with patch.object(
-            client.api, "get_host", new_callable=AsyncMock
-        ) as mock:
-            mock.return_value = _mock_response(mock_data)
-            report = await client.exposure_report("10.0.0.1")
-
+        client = _mock_client(
+            get_host=AsyncMock(return_value=_mock_response(mock_data))
+        )
+        report = await exposure_report.handle(client, {"target": "10.0.0.1"})
         assert report["risk_level"] == "minimal"
         assert report["summary"]["total_services"] == 0
 
     @pytest.mark.asyncio
-    async def test_find_related_technology(self, client: LeakIXClient) -> None:
-        """Test finding related targets by technology."""
+    async def test_find_related_technology(self) -> None:
         mock_data = {
             "services": [SAMPLE_SERVICE_EVENT],
             "leaks": [],
         }
-        mock_search_results = [SAMPLE_SERVICE_EVENT]
-
-        with (
-            patch.object(
-                client.api,
-                "get_host",
-                new_callable=AsyncMock,
-            ) as mock_host,
-            patch.object(
-                client.api,
-                "search",
-                new_callable=AsyncMock,
-            ) as mock_search,
-        ):
-            mock_host.return_value = _mock_response(mock_data)
-            mock_search.return_value = _mock_response(mock_search_results)
-            result = await client.find_related("192.168.1.1", "technology")
-
+        client = _mock_client(
+            get_host=AsyncMock(return_value=_mock_response(mock_data)),
+            search=AsyncMock(
+                return_value=_mock_response([SAMPLE_SERVICE_EVENT])
+            ),
+        )
+        result = await find_related.handle(
+            client, {"target": "192.168.1.1", "relation_type": "technology"}
+        )
         assert result["relation_type"] == "technology"
         assert len(result["related"]) == 1
         assert "nginx" in result["search_query"]
 
     @pytest.mark.asyncio
-    async def test_find_related_asn(self, client: LeakIXClient) -> None:
-        """Test finding related targets by ASN."""
+    async def test_find_related_asn(self) -> None:
         mock_data = {
             "services": [SAMPLE_SERVICE_EVENT],
             "leaks": [],
         }
-
-        with (
-            patch.object(
-                client.api,
-                "get_host",
-                new_callable=AsyncMock,
-            ) as mock_host,
-            patch.object(
-                client.api,
-                "search",
-                new_callable=AsyncMock,
-            ) as mock_search,
-        ):
-            mock_host.return_value = _mock_response(mock_data)
-            mock_search.return_value = _mock_response([])
-            result = await client.find_related("192.168.1.1", "asn")
-
+        client = _mock_client(
+            get_host=AsyncMock(return_value=_mock_response(mock_data)),
+            search=AsyncMock(return_value=_mock_response([])),
+        )
+        result = await find_related.handle(
+            client, {"target": "192.168.1.1", "relation_type": "asn"}
+        )
         assert result["relation_type"] == "asn"
         assert "12345" in result["search_query"]
 
     @pytest.mark.asyncio
-    async def test_find_related_no_services(self, client: LeakIXClient) -> None:
-        """Test finding related with no services returns empty."""
+    async def test_find_related_no_services(self) -> None:
         mock_data = {"services": [], "leaks": []}
-
-        with patch.object(
-            client.api, "get_host", new_callable=AsyncMock
-        ) as mock:
-            mock.return_value = _mock_response(mock_data)
-            result = await client.find_related("192.168.1.1")
-
+        client = _mock_client(
+            get_host=AsyncMock(return_value=_mock_response(mock_data))
+        )
+        result = await find_related.handle(client, {"target": "192.168.1.1"})
         assert result["related"] == []

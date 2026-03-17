@@ -2,9 +2,10 @@
 
 from typing import Any
 
+from leakix import AsyncClient
 from mcp.types import Tool
 
-from ..client import LeakIXClient
+from .helpers import is_ip
 
 TOOL = Tool(
     name="quick_recon",
@@ -28,7 +29,20 @@ TOOL = Tool(
 )
 
 
-async def handle(client: LeakIXClient, arguments: dict[str, Any]) -> Any:
+async def handle(client: AsyncClient, arguments: dict[str, Any]) -> Any:
     """Handle quick_recon tool call."""
     target = arguments["target"]
-    return await client.quick_recon(target)
+    results: dict[str, Any] = {"target": target, "type": "unknown"}
+
+    if is_ip(target):
+        results["type"] = "ip"
+        r = await client.get_host(target)
+        results["host"] = r.json() if r.is_success() else []
+    else:
+        results["type"] = "domain"
+        r = await client.get_domain(target)
+        results["domain"] = r.json() if r.is_success() else []
+        r = await client.get_subdomains(target)
+        results["subdomains"] = r.json() if r.is_success() else []
+
+    return results
