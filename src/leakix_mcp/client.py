@@ -1,53 +1,17 @@
-"""LeakIX API client."""
+"""LeakIX MCP client with high-level reconnaissance methods."""
 
-from __future__ import annotations
-
-import asyncio
-import logging
+import contextlib
 from typing import Any
 
-import httpx
-from l9format import l9format
-
-logger = logging.getLogger(__name__)
-
-
-def parse_l9event(data: dict[str, Any]) -> l9format.L9Event | dict[str, Any]:
-    """Parse a dictionary into an L9Event, falling back to dict on error.
-
-    Args:
-        data: Raw event data from the API.
-
-    Returns:
-        Parsed L9Event or original dict if parsing fails.
-    """
-    try:
-        event: l9format.L9Event = l9format.L9Event.from_dict(data)  # type: ignore[assignment]
-        return event
-    except Exception as e:
-        logger.debug("Failed to parse L9Event: %s", e)
-        return data
-
-
-def parse_l9events(
-    data: list[dict[str, Any]],
-) -> list[l9format.L9Event | dict[str, Any]]:
-    """Parse a list of dictionaries into L9Events.
-
-    Args:
-        data: List of raw event data from the API.
-
-    Returns:
-        List of parsed L9Events or original dicts.
-    """
-    return [parse_l9event(item) for item in data]
+from leakix import AsyncClient, Scope
 
 
 class LeakIXClient:
-    """Async client for the LeakIX API."""
+    """MCP client for LeakIX with high-level recon methods.
 
-    BASE_URL = "https://leakix.net"
-    DEFAULT_TIMEOUT = 30.0
+    The `api` attribute exposes the underlying AsyncClient for direct access
+    to core methods (search, get_host, get_domain, etc.).
+    """
 
     def __init__(self, api_key: str) -> None:
         """Initialize the LeakIX client.
@@ -55,151 +19,224 @@ class LeakIXClient:
         Args:
             api_key: LeakIX API key for authentication.
         """
-        self.api_key = api_key
-        self._client: httpx.AsyncClient | None = None
-
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create the HTTP client."""
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(
-                base_url=self.BASE_URL,
-                headers={
-                    "accept": "application/json",
-                    "api-key": self.api_key,
-                },
-                timeout=self.DEFAULT_TIMEOUT,
-            )
-        return self._client
+        self.api = AsyncClient(api_key=api_key)
 
     async def close(self) -> None:
         """Close the HTTP client."""
-        if self._client is not None and not self._client.is_closed:
-            await self._client.aclose()
-            self._client = None
+        await self.api.close()
 
-    async def _handle_rate_limit(self, response: httpx.Response) -> None:
-        """Handle rate limiting by waiting if necessary."""
-        if response.status_code == 429:
-            wait_ms = response.headers.get("x-limited-for", "1000")
-            wait_seconds = int(wait_ms) / 1000
-            await asyncio.sleep(wait_seconds)
+    def _get_field(self, obj: Any, field: str) -> Any:
+        """Get field from object or dict."""
+        if obj is None:
+            return None
+        if isinstance(obj, dict):
+            return obj.get(field)
+        return getattr(obj, field, None)
 
-    async def _request(
-        self,
-        method: str,
-        path: str,
-        params: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | list[dict[str, Any]]:
-        """Make an API request with rate limit handling.
+    def _is_ip(self, target: str) -> bool:
+        """Check if target is an IPv4 address."""
+        try:
+            parts = target.split(".")
+            return len(parts) == 4 and all(
+                p.isdigit() and 0 <= int(p) <= 255 for p in parts
+            )
+        except Exception:
+            return False
 
-        Args:
-            method: HTTP method.
-            path: API path.
-            params: Query parameters.
-
-        Returns:
-            JSON response data.
-
-        Raises:
-            httpx.HTTPStatusError: If the request fails.
-        """
-        client = await self._get_client()
-        response = await client.request(method, path, params=params)
-
-        if response.status_code == 429:
-            await self._handle_rate_limit(response)
-            response = await client.request(method, path, params=params)
-
-        response.raise_for_status()
-        data: dict[str, Any] | list[dict[str, Any]] = response.json()
-        return data
-
-    async def search(
-        self,
-        query: str,
-        scope: str = "service",
-        page: int = 0,
-    ) -> list[l9format.L9Event | dict[str, Any]]:
-        """Search LeakIX for services or leaks.
+    async def quick_recon(self, target: str) -> dict[str, Any]:
+        """Quick reconnaissance on a target (IP or domain).
 
         Args:
-            query: Search query string.
-            scope: Either "service" or "leak".
-            page: Page number (0-indexed).
+            target: IP address or domain name.
 
         Returns:
-            List of L9Event results.
+            Combined reconnaissance results.
         """
-        params = {"q": query, "scope": scope, "page": page}
-        result = await self._request("GET", "/search", params=params)
-        if isinstance(result, list):
-            return parse_l9events(result)
-        return []
+        results: dict[str, Any] = {"target": target, "type": "unknown"}
 
-    async def get_host(
-        self,
-        ip: str,
-    ) -> dict[str, list[l9format.L9Event | dict[str, Any]]]:
-        """Get information about a specific IP address.
+        if self._is_ip(target):
+            results["type"] = "ip"
+            r = await self.api.get_host(target)
+            results["host"] = r.json() if r.is_success() else []
+        else:
+            results["type"] = "domain"
+            r = await self.api.get_domain(target)
+            results["domain"] = r.json() if r.is_success() else []
+            r = await self.api.get_subdomains(target)
+            results["subdomains"] = r.json() if r.is_success() else []
+
+        return results
+
+    async def exposure_report(self, target: str) -> dict[str, Any]:
+        """Generate a security exposure report for a target.
 
         Args:
-            ip: IPv4 or IPv6 address.
+            target: IP address or domain name.
 
         Returns:
-            Host information with Services and Leaks arrays.
+            Structured security exposure report.
         """
-        result = await self._request("GET", f"/host/{ip}")
-        if isinstance(result, dict):
-            return {
-                "Services": parse_l9events(result.get("Services") or []),
-                "Leaks": parse_l9events(result.get("Leaks") or []),
-            }
-        return {"Services": [], "Leaks": []}
+        report: dict[str, Any] = {
+            "target": target,
+            "summary": {
+                "total_services": 0,
+                "total_leaks": 0,
+                "critical_findings": [],
+                "exposed_ports": [],
+                "technologies": [],
+                "countries": [],
+            },
+            "services": [],
+            "leaks": [],
+            "subdomains": [],
+            "risk_level": "unknown",
+        }
 
-    async def get_domain(
+        if self._is_ip(target):
+            r = await self.api.get_host(target)
+        else:
+            r = await self.api.get_domain(target)
+            with contextlib.suppress(Exception):
+                sub_r = await self.api.get_subdomains(target)
+                report["subdomains"] = (
+                    sub_r.json() if sub_r.is_success() else []
+                )
+
+        data = r.json() if r.is_success() else {}
+        # Process services
+        services = data.get("services") or []
+        report["services"] = services
+        report["summary"]["total_services"] = len(services)
+
+        ports_seen: set[int] = set()
+        technologies_seen: set[str] = set()
+        countries_seen: set[str] = set()
+
+        for svc in services:
+            port = self._get_field(svc, "port")
+            if port:
+                ports_seen.add(int(port) if isinstance(port, str) else port)
+            service = self._get_field(svc, "service")
+            if service:
+                software = self._get_field(service, "software")
+                if software:
+                    name = self._get_field(software, "name")
+                    if name:
+                        technologies_seen.add(name)
+            geoip = self._get_field(svc, "geoip")
+            if geoip:
+                country = self._get_field(geoip, "country_name")
+                if country:
+                    countries_seen.add(country)
+
+        report["summary"]["exposed_ports"] = sorted(ports_seen)
+        report["summary"]["technologies"] = sorted(technologies_seen)
+        report["summary"]["countries"] = sorted(countries_seen)
+
+        # Process leaks
+        leaks = data.get("leaks") or []
+        report["leaks"] = leaks
+        report["summary"]["total_leaks"] = len(leaks)
+
+        # Identify critical findings
+        critical: list[str] = []
+        for leak in leaks:
+            leak_data = self._get_field(leak, "leak")
+            severity = (
+                self._get_field(leak_data, "severity") if leak_data else None
+            )
+            if severity in ("critical", "high"):
+                plugin = self._get_field(leak, "event_source")
+                if plugin:
+                    critical.append(f"{severity}: {plugin}")
+
+        report["summary"]["critical_findings"] = critical
+
+        # Calculate risk level
+        if len(leaks) > 10 or len(critical) > 0:
+            report["risk_level"] = "critical"
+        elif len(leaks) > 5:
+            report["risk_level"] = "high"
+        elif len(leaks) > 0:
+            report["risk_level"] = "medium"
+        elif len(services) > 10:
+            report["risk_level"] = "low"
+        else:
+            report["risk_level"] = "minimal"
+
+        return report
+
+    async def find_related(
         self,
-        domain: str,
-    ) -> dict[str, list[l9format.L9Event | dict[str, Any]]]:
-        """Get information about a specific domain.
+        target: str,
+        relation_type: str = "technology",
+    ) -> dict[str, Any]:
+        """Find targets related to the given target.
 
         Args:
-            domain: Domain name.
+            target: IP address or domain to find relations for.
+            relation_type: Type of relation (technology, asn, network).
 
         Returns:
-            Domain information with Services and Leaks arrays.
+            Related targets based on shared characteristics.
         """
-        result = await self._request("GET", f"/domain/{domain}")
-        if isinstance(result, dict):
-            return {
-                "Services": parse_l9events(result.get("Services") or []),
-                "Leaks": parse_l9events(result.get("Leaks") or []),
-            }
-        return {"Services": [], "Leaks": []}
+        results: dict[str, Any] = {
+            "target": target,
+            "relation_type": relation_type,
+            "related": [],
+        }
 
-    async def get_subdomains(
-        self,
-        domain: str,
-    ) -> list[dict[str, Any]]:
-        """Get subdomains for a domain.
+        if self._is_ip(target):
+            r = await self.api.get_host(target)
+        else:
+            r = await self.api.get_domain(target)
 
-        Args:
-            domain: Domain name.
+        data = r.json() if r.is_success() else {}
+        services = data.get("services") or []
+        if not services:
+            return results
 
-        Returns:
-            List of subdomain records.
-        """
-        result = await self._request("GET", f"/api/subdomains/{domain}")
-        if isinstance(result, list):
-            return result
-        return []
+        first_svc = services[0]
 
-    async def get_plugins(self) -> list[dict[str, Any]]:
-        """Get list of available plugins.
+        if relation_type == "technology":
+            software_name = None
+            for svc in services:
+                service = self._get_field(svc, "service")
+                software = (
+                    self._get_field(service, "software") if service else None
+                )
+                software_name = (
+                    self._get_field(software, "name") if software else None
+                )
+                if software_name:
+                    break
 
-        Returns:
-            List of plugin information.
-        """
-        result = await self._request("GET", "/api/plugins")
-        if isinstance(result, list):
-            return result
-        return []
+            if software_name:
+                query = f'+service.software.name:"{software_name}"'
+                results["search_query"] = query
+                r = await self.api.search(query, scope=Scope.SERVICE, page=0)
+                results["related"] = r.json() if r.is_success() else []
+
+        elif relation_type == "asn":
+            network = self._get_field(first_svc, "network")
+            asn = self._get_field(network, "asn") if network else None
+
+            if asn:
+                query = f"+asn:{asn}"
+                results["search_query"] = query
+                r = await self.api.search(query, scope=Scope.SERVICE, page=0)
+                results["related"] = r.json() if r.is_success() else []
+
+        elif relation_type == "network":
+            network_obj = self._get_field(first_svc, "network")
+            network = (
+                self._get_field(network_obj, "network") if network_obj else None
+            )
+
+            if network:
+                query = f'+network.network:"{network}"'
+                results["search_query"] = query
+                r = await self.api.search(query, scope=Scope.SERVICE, page=0)
+                results["related"] = r.json() if r.is_success() else []
+
+        return results

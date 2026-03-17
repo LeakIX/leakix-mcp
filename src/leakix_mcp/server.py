@@ -1,13 +1,11 @@
 """LeakIX MCP Server implementation."""
 
-from __future__ import annotations
-
 import json
 import os
 import sys
 from typing import Any
 
-from l9format import l9format
+from leakix import RawQuery, Scope
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
@@ -35,9 +33,9 @@ def get_client() -> LeakIXClient:
     return _client
 
 
-def serialize_l9event(obj: Any) -> Any:
-    """Serialize L9Event objects to dicts for JSON encoding."""
-    if isinstance(obj, l9format.L9Event):
+def serialize_object(obj: Any) -> Any:
+    """Serialize objects to dicts for JSON encoding."""
+    if hasattr(obj, "to_dict"):
         return obj.to_dict()
     return str(obj)
 
@@ -45,23 +43,21 @@ def serialize_l9event(obj: Any) -> Any:
 def format_result(data: Any) -> str:
     """Format result data as JSON string.
 
-    Handles L9Event objects by converting them to dicts.
+    Handles L9Event and other objects by converting them to dicts.
     """
     if isinstance(data, list):
         data = [
-            item.to_dict() if isinstance(item, l9format.L9Event) else item
+            item.to_dict() if hasattr(item, "to_dict") else item
             for item in data
         ]
     elif isinstance(data, dict):
         for key, value in data.items():
             if isinstance(value, list):
                 data[key] = [
-                    item.to_dict()
-                    if isinstance(item, l9format.L9Event)
-                    else item
+                    item.to_dict() if hasattr(item, "to_dict") else item
                     for item in value
                 ]
-    return json.dumps(data, indent=2, default=serialize_l9event)
+    return json.dumps(data, indent=2, default=serialize_object)
 
 
 @server.list_tools()  # type: ignore[no-untyped-call,untyped-decorator]
@@ -194,6 +190,104 @@ async def list_tools() -> list[Tool]:
                 "properties": {},
             },
         ),
+        Tool(
+            name="bulk_export",
+            description=(
+                "Bulk export leak data (requires Pro API). "
+                "Returns aggregated results for large-scale analysis. "
+                "Use this for exporting large datasets efficiently. "
+                "Results include grouped events by target."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "Search query. Examples: "
+                            "'+plugin:GitConfigHttpPlugin', "
+                            "'+country:FR +plugin:MongoOpenPlugin'"
+                        ),
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="quick_recon",
+            description=(
+                "Quick reconnaissance on a target IP or domain. "
+                "Automatically detects target type and performs: "
+                "- For IPs: host lookup with services and leaks "
+                "- For domains: domain lookup + subdomain enumeration "
+                "Use this for fast initial assessment of a target."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": (
+                            "IP address or domain name to investigate."
+                        ),
+                    },
+                },
+                "required": ["target"],
+            },
+        ),
+        Tool(
+            name="exposure_report",
+            description=(
+                "Generate a comprehensive security exposure report. "
+                "Analyzes a target and returns: risk level, "
+                "critical findings, exposed ports, technologies, "
+                "leak summary, and recommendations. "
+                "Perfect for security assessments."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": ("IP address or domain to analyze."),
+                    },
+                },
+                "required": ["target"],
+            },
+        ),
+        Tool(
+            name="find_related",
+            description=(
+                "Find targets related to a given IP or domain. "
+                "Discovers similar targets based on shared "
+                "characteristics like technology stack, ASN, "
+                "or network range. Useful for attack surface mapping."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": (
+                            "IP address or domain to find relations for."
+                        ),
+                    },
+                    "relation_type": {
+                        "type": "string",
+                        "enum": ["technology", "asn", "network"],
+                        "description": (
+                            "Type of relation to search for. "
+                            "technology: same software stack, "
+                            "asn: same autonomous system, "
+                            "network: same network range. "
+                            "Default: technology"
+                        ),
+                        "default": "technology",
+                    },
+                },
+                "required": ["target"],
+            },
+        ),
     ]
 
 
@@ -206,33 +300,89 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         if name == "search_services":
             query = arguments["query"]
             page = arguments.get("page", 0)
-            results = await client.search(query, scope="service", page=page)
-            return [TextContent(type="text", text=format_result(results))]
+            r = await client.api.search(query, scope=Scope.SERVICE, page=page)
+            return [
+                TextContent(
+                    type="text",
+                    text=format_result(r.json() if r.is_success() else []),
+                )
+            ]
 
         elif name == "search_leaks":
             query = arguments["query"]
             page = arguments.get("page", 0)
-            results = await client.search(query, scope="leak", page=page)
-            return [TextContent(type="text", text=format_result(results))]
+            r = await client.api.search(query, scope=Scope.LEAK, page=page)
+            return [
+                TextContent(
+                    type="text",
+                    text=format_result(r.json() if r.is_success() else []),
+                )
+            ]
 
         elif name == "host_lookup":
             ip = arguments["ip"]
-            result = await client.get_host(ip)
-            return [TextContent(type="text", text=format_result(result))]
+            r = await client.api.get_host(ip)
+            return [
+                TextContent(
+                    type="text",
+                    text=format_result(r.json() if r.is_success() else {}),
+                )
+            ]
 
         elif name == "domain_lookup":
             domain = arguments["domain"]
-            result = await client.get_domain(domain)
-            return [TextContent(type="text", text=format_result(result))]
+            r = await client.api.get_domain(domain)
+            return [
+                TextContent(
+                    type="text",
+                    text=format_result(r.json() if r.is_success() else {}),
+                )
+            ]
 
         elif name == "list_subdomains":
             domain = arguments["domain"]
-            subdomains = await client.get_subdomains(domain)
-            return [TextContent(type="text", text=format_result(subdomains))]
+            r = await client.api.get_subdomains(domain)
+            return [
+                TextContent(
+                    type="text",
+                    text=format_result(r.json() if r.is_success() else []),
+                )
+            ]
 
         elif name == "list_plugins":
-            plugins = await client.get_plugins()
-            return [TextContent(type="text", text=format_result(plugins))]
+            r = await client.api.get_plugins()
+            return [
+                TextContent(
+                    type="text",
+                    text=format_result(r.json() if r.is_success() else []),
+                )
+            ]
+
+        elif name == "bulk_export":
+            query = arguments["query"]
+            r = await client.api.bulk_export(queries=[RawQuery(query)])
+            return [
+                TextContent(
+                    type="text",
+                    text=format_result(r.json() if r.is_success() else []),
+                )
+            ]
+
+        elif name == "quick_recon":
+            target = arguments["target"]
+            result = await client.quick_recon(target)
+            return [TextContent(type="text", text=format_result(result))]
+
+        elif name == "exposure_report":
+            target = arguments["target"]
+            result = await client.exposure_report(target)
+            return [TextContent(type="text", text=format_result(result))]
+
+        elif name == "find_related":
+            target = arguments["target"]
+            relation_type = arguments.get("relation_type", "technology")
+            result = await client.find_related(target, relation_type)
+            return [TextContent(type="text", text=format_result(result))]
 
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
