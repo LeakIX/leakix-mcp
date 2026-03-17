@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Infrastructure
+
+- CI: add PR hygiene checks using dannywillems/toolbox ([c3b9f1f])
+
 ### Changed
 
 - Upgrade l9format to 2.0.0, drop archived serde dependency ([4b8e300])
@@ -37,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <!-- Commit links -->
 [56b5cb1]: https://github.com/LeakIX/leakix-mcp/commit/56b5cb1
 [c931e39]: https://github.com/LeakIX/leakix-mcp/commit/c931e39
+[c3b9f1f]: https://github.com/LeakIX/leakix-mcp/commit/c3b9f1f
 [d24c894]: https://github.com/LeakIX/leakix-mcp/commit/d24c894
 [8fe308e]: https://github.com/LeakIX/leakix-mcp/commit/8fe308e
 [4b8e300]: https://github.com/LeakIX/leakix-mcp/commit/4b8e300
