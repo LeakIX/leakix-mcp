@@ -44,6 +44,9 @@ build-backend = "hatchling.build"
 [tool.hatch.metadata]
 allow-direct-references = true
 
+[tool.hatch.build.targets.sdist]
+include = ["src/leakix_mcp/", "LICENSE", "README.md", "pyproject.toml"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/leakix_mcp"]
 
