@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Move changelog check into own workflow with external script,
   add shellcheck workflow ([d24c894])
 - Makefile: add `publish` and `publish-dry-run` targets ([56b5cb1])
+- Use explicit include list for hatch sdist build target in
+  `pyproject.toml` ([c931e39])
 
 ### Added
 
@@ -34,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Commit links -->
 [56b5cb1]: https://github.com/LeakIX/leakix-mcp/commit/56b5cb1
+[c931e39]: https://github.com/LeakIX/leakix-mcp/commit/c931e39
 [d24c894]: https://github.com/LeakIX/leakix-mcp/commit/d24c894
 [8fe308e]: https://github.com/LeakIX/leakix-mcp/commit/8fe308e
 [4b8e300]: https://github.com/LeakIX/leakix-mcp/commit/4b8e300
