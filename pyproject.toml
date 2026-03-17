@@ -23,7 +23,7 @@ requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.26.0",
     "pydantic>=2.12.5",
-    "leakix @ git+https://github.com/LeakIX/LeakIXClient-Python.git@feat/async-client-search-api",
+    "leakix>=1.0.0",
 ]
 
 [project.scripts]
@@ -40,9 +40,6 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.build.targets.sdist]
 include = ["src/leakix_mcp/", "LICENSE", "README.md", "pyproject.toml"]
@@ -65,6 +62,10 @@ warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
 module = "l9format.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "leakix.*"
 ignore_missing_imports = true
 
 

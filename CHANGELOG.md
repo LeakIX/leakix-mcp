@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Makefile: add `publish` and `publish-dry-run` targets ([56b5cb1])
 - Use explicit include list for hatch sdist build target in
   `pyproject.toml` ([c931e39])
+- Update l9format requirement from >=2.0.0 to >=2.0.1 ([8a14e28])
 
 ### Added
 
@@ -48,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI workflow
 
 <!-- Commit links -->
+[8a14e28]: https://github.com/LeakIX/leakix-mcp/commit/8a14e28
 [56b5cb1]: https://github.com/LeakIX/leakix-mcp/commit/56b5cb1
 [c931e39]: https://github.com/LeakIX/leakix-mcp/commit/c931e39
 [c3b9f1f]: https://github.com/LeakIX/leakix-mcp/commit/c3b9f1f
