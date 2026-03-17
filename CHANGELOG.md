@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `bulk_export` tool for bulk leak data export
+- `quick_recon` tool for quick IP/domain reconnaissance
+- `exposure_report` tool for security exposure analysis
+- `find_related` tool for discovering related targets
+
 ### Changed
 
+- Use official `leakix` library AsyncClient instead of custom httpx wrapper
+- Use `Scope` enum and `AbstractResponse` from leakix client
 - Upgrade l9format to 2.0.0, drop archived serde dependency ([4b8e300])
 - Bump ruff from 0.14.14 to 0.15.5 ([eea2081])
 - Support Python 3.11, 3.12, 3.13, and 3.14 ([f23cf81])
