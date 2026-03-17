@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Move each MCP tool into its own file under `tools/` directory
   ([8ff0c15])
 - Simplify README to minimal quick start instructions ([756c794])
+- Remove `client.py` wrapper, use `AsyncClient` directly in tools
+  ([7d3c933])
 
 ### Added
 
@@ -52,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI workflow
 
 <!-- Commit links -->
+[7d3c933]: https://github.com/LeakIX/leakix-mcp/commit/7d3c933
 [756c794]: https://github.com/LeakIX/leakix-mcp/commit/756c794
 [8ff0c15]: https://github.com/LeakIX/leakix-mcp/commit/8ff0c15
 [8a14e28]: https://github.com/LeakIX/leakix-mcp/commit/8a14e28
