@@ -23,9 +23,35 @@ setup: ## Setup development environment
 install: ## Install the package
 	uv sync --no-dev
 
+VERSION := $(shell python -c \
+	"import tomllib; \
+	print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+
 .PHONY: build
-build: ## Build the package
+build: clean-dist ## Build the package
 	uv build
+
+.PHONY: publish-dry-run
+publish-dry-run: build ## Dry-run: show what would be published
+	@echo "Would publish leakix-mcp v$(VERSION)"
+	@echo "Would create tag: v$(VERSION)"
+	@echo "Would create GitHub release: v$(VERSION)"
+	@echo "Package contents:"
+	@ls -lh dist/
+	uv publish --dry-run
+
+.PHONY: publish
+publish: build ## Publish to PyPI, tag and create GitHub release
+	uv publish
+	git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
+	git push origin "v$(VERSION)"
+	gh release create "v$(VERSION)" dist/* \
+		--title "v$(VERSION)" \
+		--notes "Release v$(VERSION)"
+
+.PHONY: clean-dist
+clean-dist: ## Clean distribution artifacts
+	rm -rf dist/
 
 .PHONY: clean
 clean: ## Clean build artifacts
