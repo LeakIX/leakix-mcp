@@ -21,7 +21,7 @@ dependencies = [
     "mcp>=1.26.0",
     "httpx>=0.28.1",
     "pydantic>=2.12.5",
-    "l9format>=2.0.0",
+    "l9format>=2.0.1",
 ]
 
 [project.scripts]
