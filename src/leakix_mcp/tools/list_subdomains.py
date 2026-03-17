@@ -2,9 +2,8 @@
 
 from typing import Any
 
+from leakix import AsyncClient
 from mcp.types import Tool
-
-from ..client import LeakIXClient
 
 TOOL = Tool(
     name="list_subdomains",
@@ -26,8 +25,8 @@ TOOL = Tool(
 )
 
 
-async def handle(client: LeakIXClient, arguments: dict[str, Any]) -> Any:
+async def handle(client: AsyncClient, arguments: dict[str, Any]) -> Any:
     """Handle list_subdomains tool call."""
     domain = arguments["domain"]
-    r = await client.api.get_subdomains(domain)
+    r = await client.get_subdomains(domain)
     return r.json() if r.is_success() else []

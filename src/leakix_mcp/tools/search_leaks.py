@@ -2,10 +2,8 @@
 
 from typing import Any
 
-from leakix import Scope
+from leakix import AsyncClient, Scope
 from mcp.types import Tool
-
-from ..client import LeakIXClient
 
 TOOL = Tool(
     name="search_leaks",
@@ -38,9 +36,9 @@ TOOL = Tool(
 )
 
 
-async def handle(client: LeakIXClient, arguments: dict[str, Any]) -> Any:
+async def handle(client: AsyncClient, arguments: dict[str, Any]) -> Any:
     """Handle search_leaks tool call."""
     query = arguments["query"]
     page = arguments.get("page", 0)
-    r = await client.api.search(query, scope=Scope.LEAK, page=page)
+    r = await client.search(query, scope=Scope.LEAK, page=page)
     return r.json() if r.is_success() else []

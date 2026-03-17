@@ -2,9 +2,8 @@
 
 from typing import Any
 
+from leakix import AsyncClient
 from mcp.types import Tool
-
-from ..client import LeakIXClient
 
 TOOL = Tool(
     name="domain_lookup",
@@ -27,8 +26,8 @@ TOOL = Tool(
 )
 
 
-async def handle(client: LeakIXClient, arguments: dict[str, Any]) -> Any:
+async def handle(client: AsyncClient, arguments: dict[str, Any]) -> Any:
     """Handle domain_lookup tool call."""
     domain = arguments["domain"]
-    r = await client.api.get_domain(domain)
+    r = await client.get_domain(domain)
     return r.json() if r.is_success() else {}

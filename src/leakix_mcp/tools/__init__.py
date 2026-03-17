@@ -2,9 +2,9 @@
 
 from typing import Any
 
+from leakix import AsyncClient
 from mcp.types import Tool
 
-from ..client import LeakIXClient
 from . import (
     bulk_export,
     domain_lookup,
@@ -40,7 +40,7 @@ def get_tools() -> list[Tool]:
 
 
 async def dispatch(
-    client: LeakIXClient, name: str, arguments: dict[str, Any]
+    client: AsyncClient, name: str, arguments: dict[str, Any]
 ) -> Any:
     """Dispatch a tool call to the appropriate handler.
 

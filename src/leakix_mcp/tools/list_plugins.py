@@ -2,9 +2,8 @@
 
 from typing import Any
 
+from leakix import AsyncClient
 from mcp.types import Tool
-
-from ..client import LeakIXClient
 
 TOOL = Tool(
     name="list_plugins",
@@ -21,7 +20,7 @@ TOOL = Tool(
 )
 
 
-async def handle(client: LeakIXClient, arguments: dict[str, Any]) -> Any:
+async def handle(client: AsyncClient, arguments: dict[str, Any]) -> Any:
     """Handle list_plugins tool call."""
-    r = await client.api.get_plugins()
+    r = await client.get_plugins()
     return r.json() if r.is_success() else []
