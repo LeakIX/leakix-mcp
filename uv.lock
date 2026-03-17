@@ -285,11 +285,11 @@ wheels = [
 
 [[package]]
 name = "l9format"
-version = "2.0.0"
+version = "2.0.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e4/3b/ff3757809d9977f5707ccc903072a3d41b8918fa2aadbfd23099af40a8c7/l9format-2.0.0.tar.gz", hash = "sha256:ec597ffc7fbf46b488e3d87b1978f51d569be40ee0de0777473114f0984fc4dd", size = 49863, upload-time = "2026-03-16T17:13:13.386Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/96/f5/73e8a6eb309a485ed5f5b4d9eebfe6f604c0760daaadfd8ac33c94f2dacd/l9format-2.0.1.tar.gz", hash = "sha256:f86a1447d1cc32bfa85b6d030cd404667685e4acbc216c751f304fbd9a1d914c", size = 6656, upload-time = "2026-03-17T12:19:30.039Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/68/7c/543d122754b760b28a1a66d129833eebaff426d3ace9eecf4168655a8a4d/l9format-2.0.0-py3-none-any.whl", hash = "sha256:49c4890c98a25cba819bf6584d97b033703f0b16c53d5aceaca1d7b604f619ec", size = 6414, upload-time = "2026-03-16T17:13:14.518Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/f4/5c75ff56752282d70af4a9c4c5a565f477efd4ab53ae91ffcc9bc1b1789b/l9format-2.0.1-py3-none-any.whl", hash = "sha256:7f977b6f4cd110c7c91bd9e41e4057a2d8149429b65d0d0da824e7084e623d2b", size = 6412, upload-time = "2026-03-17T12:19:31.037Z" },
 ]
 
 [[package]]
@@ -314,7 +314,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "l9format", specifier = ">=2.0.0" },
+    { name = "l9format", specifier = ">=2.0.1" },
     { name = "mcp", specifier = ">=1.26.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
 ]
