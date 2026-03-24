@@ -395,7 +395,7 @@ wheels = [
 
 [[package]]
 name = "leakix"
-version = "1.0.0"
+version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fire" },
@@ -403,9 +403,9 @@ dependencies = [
     { name = "l9format" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/50/ee/5319f74c28f8679bd95003ebbf8f0802480c7586c8797a6561917f98d63a/leakix-1.0.0.tar.gz", hash = "sha256:821a46a9e6eb3eeda1edfebac6b5baed459d53eeac2ec665adc645e3de65647e", size = 10029, upload-time = "2026-03-17T13:20:06.728Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ac/55/d61e4c5c59f5f61ff7c7540768092a8cdb56eea5d53a94f1165480045f5d/leakix-1.1.0.tar.gz", hash = "sha256:e003503b6b8f15e75c9a9e065b5dcd7a3e59581eab3974c53f3468ea2acb1cf9", size = 10143, upload-time = "2026-03-20T12:56:07.627Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a3/87/b37f6d59acff692ad610e40c2328c79245befac5b64e66d4b54e4c8c2700/leakix-1.0.0-py3-none-any.whl", hash = "sha256:e88e06cca119501a48dd5360efca0e5be13b7be46c7600021229100a5e90d2ee", size = 12248, upload-time = "2026-03-17T13:20:07.571Z" },
+    { url = "https://files.pythonhosted.org/packages/26/0a/fb9cbbb654bebad5e01f4655aee5418bc9bf307284c4bf0fc7297db2c332/leakix-1.1.0-py3-none-any.whl", hash = "sha256:770070a7a76db17e19fc969a4aaa7bb210314e6bc9bb98825206da06d6e502df", size = 12373, upload-time = "2026-03-20T12:56:06.225Z" },
 ]
 
 [[package]]
