@@ -22,7 +22,7 @@ classifiers = [
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.26.0",
-    "pydantic>=2.13.0",
+    "pydantic>=2.13.3",
     "leakix>=1.0.0",
 ]
 
