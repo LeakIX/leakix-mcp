@@ -464,6 +464,7 @@ dependencies = [
     { name = "leakix" },
     { name = "mcp" },
     { name = "pydantic" },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -479,6 +480,7 @@ requires-dist = [
     { name = "leakix", specifier = ">=1.0.0" },
     { name = "mcp", specifier = ">=1.28.1" },
     { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "uvicorn", specifier = ">=0.34.0" },
 ]
 
 [package.metadata.requires-dev]
