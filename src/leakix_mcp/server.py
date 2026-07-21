@@ -17,7 +17,8 @@ from mcp.server.stdio import stdio_server
 from mcp.server.streamable_http_manager import (
     StreamableHTTPSessionManager,
 )
-from mcp.types import TextContent, Tool
+from mcp.types import Resource, TextContent, Tool
+from pydantic import AnyUrl
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.base import (
@@ -28,6 +29,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Mount
 
+from .resources import get_resources, read_resource
 from .tools import dispatch, get_tools
 
 server = Server("leakix-mcp")
@@ -75,6 +77,21 @@ def format_result(data: Any) -> str:
 async def list_tools() -> list[Tool]:
     """List available LeakIX tools."""
     return get_tools()
+
+
+@server.list_resources()  # type: ignore[no-untyped-call,untyped-decorator]
+async def list_resources() -> list[Resource]:
+    """List available LeakIX resources."""
+    return get_resources()
+
+
+@server.read_resource()  # type: ignore[no-untyped-call,untyped-decorator]
+async def handle_read_resource(uri: AnyUrl) -> str:
+    """Read a LeakIX resource by URI."""
+    content = await read_resource(str(uri))
+    if content is None:
+        raise ValueError(f"Unknown resource: {uri}")
+    return content
 
 
 @server.call_tool()  # type: ignore[untyped-decorator]
