@@ -4,7 +4,7 @@ MCP server for the [LeakIX](https://leakix.net) API.
 
 ## Quick start
 
-Get your API key from [leakix.net/settings](https://leakix.net/settings), then:
+Get your API key from [leakix.net/settings](https://leakix.net/settings), then
 
 ```bash
 # Claude Code
