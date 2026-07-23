@@ -165,7 +165,7 @@ class TestTools:
 
     @pytest.mark.asyncio
     async def test_exposure_report_empty(self) -> None:
-        mock_data = {"services": [], "leaks": []}
+        mock_data: dict[str, list[object]] = {"services": [], "leaks": []}
         client = _mock_client(
             get_host=AsyncMock(return_value=_mock_response(mock_data))
         )
@@ -210,7 +210,7 @@ class TestTools:
 
     @pytest.mark.asyncio
     async def test_find_related_no_services(self) -> None:
-        mock_data = {"services": [], "leaks": []}
+        mock_data: dict[str, list[object]] = {"services": [], "leaks": []}
         client = _mock_client(
             get_host=AsyncMock(return_value=_mock_response(mock_data))
         )
