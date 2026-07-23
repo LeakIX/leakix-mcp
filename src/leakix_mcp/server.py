@@ -1,16 +1,32 @@
 """LeakIX MCP Server implementation."""
 
 import argparse
+import asyncio
 import json
 import os
 import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from typing import Any
 
+import uvicorn
 from leakix import AsyncClient
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
+from mcp.server.streamable_http_manager import (
+    StreamableHTTPSessionManager,
+)
 from mcp.types import TextContent, Tool
+from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.base import (
+    BaseHTTPMiddleware,
+    RequestResponseEndpoint,
+)
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+from starlette.routing import Mount
 
 from .tools import dispatch, get_tools
 
@@ -107,22 +123,6 @@ def parse_address(address: str) -> tuple[str, int]:
 
 def run_http(host: str, port: int) -> None:
     """Run the MCP server over Streamable HTTP."""
-    from collections.abc import AsyncIterator
-    from contextlib import asynccontextmanager
-
-    import uvicorn
-    from mcp.server.streamable_http_manager import (
-        StreamableHTTPSessionManager,
-    )
-    from starlette.applications import Starlette
-    from starlette.middleware import Middleware
-    from starlette.middleware.base import (
-        BaseHTTPMiddleware,
-        RequestResponseEndpoint,
-    )
-    from starlette.requests import Request
-    from starlette.responses import JSONResponse, Response
-    from starlette.routing import Mount
 
     class ApiKeyMiddleware(BaseHTTPMiddleware):
         async def dispatch(
@@ -157,7 +157,6 @@ def run_http(host: str, port: int) -> None:
 
 def main() -> None:
     """Entry point for the server."""
-    import asyncio
 
     parser = argparse.ArgumentParser(description="LeakIX MCP Server")
     parser.add_argument(
