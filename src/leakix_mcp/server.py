@@ -29,6 +29,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Mount
 
+from .address import AddressError, parse_address
 from .resources import get_resources, read_resource
 from .tools import dispatch, get_tools
 
@@ -128,16 +129,6 @@ async def run_stdio() -> None:
         )
 
 
-def parse_address(address: str) -> tuple[str, int]:
-    """Parse a server address like '0.0.0.0:8080' or ':8081'."""
-    host, _, port_str = address.rpartition(":")
-    if not port_str:
-        raise ValueError(
-            f"Invalid address format: {address!r} (expected host:port)"
-        )
-    return host or "0.0.0.0", int(port_str)
-
-
 def run_http(host: str, port: int) -> None:
     """Run the MCP server over Streamable HTTP."""
 
@@ -187,8 +178,11 @@ def main() -> None:
 
     try:
         if args.server_address:
-            host, port = parse_address(args.server_address)
-            run_http(host, port)
+            try:
+                address = parse_address(args.server_address)
+            except AddressError as e:
+                parser.error(str(e))
+            run_http(str(address.host), address.port)
         else:
             asyncio.run(run_stdio())
     except KeyboardInterrupt:
