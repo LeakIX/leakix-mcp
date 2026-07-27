@@ -41,3 +41,11 @@ Thumbs.db
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+
+# Docs, coverage, SBOM, nox
+site/
+.nox/
+.coverage
+coverage.xml
+sbom.cdx.json
+.hypothesis/

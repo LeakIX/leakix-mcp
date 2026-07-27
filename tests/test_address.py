@@ -95,7 +95,7 @@ def test_parse_address_str_roundtrip(address: str) -> None:
         ("localhost:", PortSyntaxError),
         ("localhost:abc", PortSyntaxError),
         ("localhost:8_0", PortSyntaxError),
-        ("localhost:８０", PortSyntaxError),
+        ("localhost:\uff18\uff10", PortSyntaxError),  # fullwidth 80
         ("localhost: 80", PortSyntaxError),
         ("localhost:+80", PortSyntaxError),
         ("localhost:-1", PortSyntaxError),

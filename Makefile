@@ -41,11 +41,11 @@ publish-dry-run: build ## Dry-run: show what would be published
 	uv publish --dry-run
 
 .PHONY: publish
-publish: build ## Publish to PyPI, tag and create GitHub release
+publish: build sbom ## Publish to PyPI, tag and create GitHub release
 	uv publish
 	git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
 	git push origin "v$(VERSION)"
-	gh release create "v$(VERSION)" dist/* \
+	gh release create "v$(VERSION)" dist/* sbom.cdx.json \
 		--title "v$(VERSION)" \
 		--notes "Release v$(VERSION)"
 
@@ -56,6 +56,7 @@ clean-dist: ## Clean distribution artifacts
 .PHONY: clean
 clean: ## Clean build artifacts
 	rm -rf dist/ build/ *.egg-info/ .pytest_cache/ .mypy_cache/ .ruff_cache/
+	rm -rf .nox/ site/ .hypothesis/ .coverage coverage.xml sbom.cdx.json
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
 .PHONY: format
@@ -80,8 +81,41 @@ typecheck: ## Run type checker
 test: ## Run tests
 	uv run pytest tests/ -v
 
+.PHONY: coverage
+coverage: ## Run tests with coverage (fails under 85%)
+	uv run pytest --cov=leakix_mcp --cov-report=term-missing \
+		--cov-report=xml --cov-fail-under=85
+
+.PHONY: test-all
+test-all: ## Run tests across all supported Python versions (nox)
+	uv run nox -s tests
+
+.PHONY: audit
+audit: ## Audit dependencies for known vulnerabilities
+	uv run pip-audit --skip-editable --progress-spinner=off
+
+.PHONY: zizmor
+zizmor: ## Audit GitHub Actions workflows for security issues
+	uv run zizmor --offline .github/workflows/
+
+.PHONY: sbom
+sbom: ## Generate a CycloneDX SBOM of runtime dependencies
+	uv export --format requirements-txt --no-dev --no-emit-project \
+		--no-hashes -o sbom-requirements.txt
+	uv run cyclonedx-py requirements sbom-requirements.txt \
+		-o sbom.cdx.json
+	rm -f sbom-requirements.txt
+
+.PHONY: docs
+docs: ## Build the documentation site (strict)
+	uv run mkdocs build --strict
+
+.PHONY: docs-serve
+docs-serve: ## Serve the documentation locally
+	uv run mkdocs serve
+
 .PHONY: check
-check: check-format lint typecheck test ## Run all checks
+check: check-format lint typecheck coverage ## Run all checks
 
 .PHONY: run
 run: ## Run the MCP server (requires LEAKIX_API_KEY env var)
