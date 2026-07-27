@@ -36,6 +36,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "ruff>=0.15.22",
     "mypy>=2.3.0",
+    "hypothesis>=6.0",
 ]
 
 [build-system]
