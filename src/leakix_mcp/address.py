@@ -108,6 +108,15 @@ Host: TypeAlias = IPv4Address | IPv6Address | Hostname
 DEFAULT_HOST: Host = IPv4Address("0.0.0.0")
 
 
+def is_ip(host: Host) -> bool:
+    """Return whether a parsed host is an IP address rather than a hostname.
+
+    Discriminates the IPv4/IPv6 injections of the ``Host`` sum type from
+    the ``Hostname`` injection.
+    """
+    return isinstance(host, IPv4Address | IPv6Address)
+
+
 def parse_host(host: str) -> Host:
     """Parse host into an IPv4Address, IPv6Address, or Hostname.
 

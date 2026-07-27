@@ -4,29 +4,24 @@ import contextlib
 from typing import Any
 
 from leakix import AsyncClient
-from mcp.types import Tool
+from pydantic import BaseModel, Field
 
-from .helpers import get_field, is_ip
+from .helpers import build_tool, get_field, resolve_target, unwrap
 
-TOOL = Tool(
-    name="exposure_report",
-    description=(
-        "Generate a comprehensive security exposure report. "
-        "Analyzes a target and returns: risk level, "
-        "critical findings, exposed ports, technologies, "
-        "leak summary, and recommendations. "
-        "Perfect for security assessments."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "target": {
-                "type": "string",
-                "description": "IP address or domain to analyze.",
-            },
-        },
-        "required": ["target"],
-    },
+
+class Args(BaseModel):
+    """Arguments for exposure_report."""
+
+    target: str = Field(description="IP address or domain to analyze.")
+
+
+TOOL = build_tool(
+    "exposure_report",
+    "Generate a comprehensive security exposure report. "
+    "Analyzes a target and returns: risk level, critical findings, "
+    "exposed ports, technologies, leak summary, and recommendations. "
+    "Perfect for security assessments.",
+    Args,
 )
 
 
@@ -99,16 +94,12 @@ def _build_report(
 
 async def handle(client: AsyncClient, arguments: dict[str, Any]) -> Any:
     """Handle exposure_report tool call."""
-    target = arguments["target"]
+    args = Args.model_validate(arguments)
+    kind, data = await resolve_target(client, args.target)
+
     subdomains: list[Any] = []
-
-    if is_ip(target):
-        r = await client.get_host(target)
-    else:
-        r = await client.get_domain(target)
+    if kind == "domain":
         with contextlib.suppress(Exception):
-            sub_r = await client.get_subdomains(target)
-            subdomains = sub_r.json() if sub_r.is_success() else []
+            subdomains = unwrap(await client.get_subdomains(args.target))
 
-    data = r.json() if r.is_success() else {}
-    return _build_report(target, data, subdomains)
+    return _build_report(args.target, data, subdomains)

@@ -3,31 +3,36 @@
 from typing import Any
 
 from leakix import AsyncClient
-from mcp.types import Tool
+from pydantic import BaseModel, Field, field_validator
 
-TOOL = Tool(
-    name="host_lookup",
-    description=(
-        "Get detailed information about a specific IP address. "
-        "Returns all known services and data leaks associated with "
-        "the IP, including open ports, software versions, SSL "
-        "certificates, and any exposed data."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "ip": {
-                "type": "string",
-                "description": "IPv4 or IPv6 address to lookup.",
-            },
-        },
-        "required": ["ip"],
-    },
+from ..address import is_ip, parse_host
+from .helpers import build_tool, unwrap
+
+
+class Args(BaseModel):
+    """Arguments for host_lookup."""
+
+    ip: str = Field(description="IPv4 or IPv6 address to lookup.")
+
+    @field_validator("ip")
+    @classmethod
+    def _must_be_ip(cls, value: str) -> str:
+        if not is_ip(parse_host(value)):
+            raise ValueError("must be an IPv4 or IPv6 address")
+        return value
+
+
+TOOL = build_tool(
+    "host_lookup",
+    "Get detailed information about a specific IP address. "
+    "Returns all known services and data leaks associated with the IP, "
+    "including open ports, software versions, SSL certificates, and any "
+    "exposed data.",
+    Args,
 )
 
 
 async def handle(client: AsyncClient, arguments: dict[str, Any]) -> Any:
     """Handle host_lookup tool call."""
-    ip = arguments["ip"]
-    r = await client.get_host(ip)
-    return r.json() if r.is_success() else {}
+    args = Args.model_validate(arguments)
+    return unwrap(await client.get_host(args.ip))

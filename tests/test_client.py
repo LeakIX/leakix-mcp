@@ -1,5 +1,6 @@
 """Tests for the LeakIX MCP tools."""
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -61,15 +62,16 @@ SAMPLE_SUBDOMAIN = {
 }
 
 
-def _mock_response(data: object) -> MagicMock:
+def _mock_response(data: object, *, success: bool = True) -> Any:
     """Create a mock AbstractResponse."""
     resp = MagicMock()
-    resp.is_success.return_value = True
+    resp.is_success.return_value = success
+    resp.status_code.return_value = 200 if success else 500
     resp.json.return_value = data
     return resp
 
 
-def _mock_client(**methods: AsyncMock) -> MagicMock:
+def _mock_client(**methods: AsyncMock) -> Any:
     """Create a mock AsyncClient with async methods."""
     client = MagicMock()
     for name, mock in methods.items():
@@ -79,17 +81,6 @@ def _mock_client(**methods: AsyncMock) -> MagicMock:
 
 class TestHelpers:
     """Tests for helper functions."""
-
-    def test_is_ip_valid(self) -> None:
-        assert helpers.is_ip("192.168.1.1") is True
-        assert helpers.is_ip("0.0.0.0") is True
-        assert helpers.is_ip("255.255.255.255") is True
-
-    def test_is_ip_invalid(self) -> None:
-        assert helpers.is_ip("example.com") is False
-        assert helpers.is_ip("256.1.1.1") is False
-        assert helpers.is_ip("1.2.3") is False
-        assert helpers.is_ip("") is False
 
     def test_get_field_dict(self) -> None:
         assert helpers.get_field({"name": "nginx"}, "name") == "nginx"
@@ -116,7 +107,7 @@ class TestTools:
 
     @pytest.mark.asyncio
     async def test_quick_recon_domain(self) -> None:
-        mock_domain_data = {
+        mock_domain_data: dict[str, Any] = {
             "services": [SAMPLE_SERVICE_EVENT],
             "leaks": [SAMPLE_LEAK_EVENT],
         }
@@ -133,7 +124,7 @@ class TestTools:
 
     @pytest.mark.asyncio
     async def test_exposure_report_ip(self) -> None:
-        mock_data = {
+        mock_data: dict[str, Any] = {
             "services": [SAMPLE_SERVICE_EVENT],
             "leaks": [SAMPLE_LEAK_EVENT],
         }
@@ -152,7 +143,7 @@ class TestTools:
 
     @pytest.mark.asyncio
     async def test_exposure_report_no_leaks(self) -> None:
-        mock_data = {
+        mock_data: dict[str, Any] = {
             "services": [SAMPLE_SERVICE_EVENT],
             "leaks": [],
         }
@@ -165,7 +156,7 @@ class TestTools:
 
     @pytest.mark.asyncio
     async def test_exposure_report_empty(self) -> None:
-        mock_data = {"services": [], "leaks": []}
+        mock_data: dict[str, Any] = {"services": [], "leaks": []}
         client = _mock_client(
             get_host=AsyncMock(return_value=_mock_response(mock_data))
         )
@@ -175,7 +166,7 @@ class TestTools:
 
     @pytest.mark.asyncio
     async def test_find_related_technology(self) -> None:
-        mock_data = {
+        mock_data: dict[str, Any] = {
             "services": [SAMPLE_SERVICE_EVENT],
             "leaks": [],
         }
@@ -194,7 +185,7 @@ class TestTools:
 
     @pytest.mark.asyncio
     async def test_find_related_asn(self) -> None:
-        mock_data = {
+        mock_data: dict[str, Any] = {
             "services": [SAMPLE_SERVICE_EVENT],
             "leaks": [],
         }
@@ -210,7 +201,7 @@ class TestTools:
 
     @pytest.mark.asyncio
     async def test_find_related_no_services(self) -> None:
-        mock_data = {"services": [], "leaks": []}
+        mock_data: dict[str, Any] = {"services": [], "leaks": []}
         client = _mock_client(
             get_host=AsyncMock(return_value=_mock_response(mock_data))
         )

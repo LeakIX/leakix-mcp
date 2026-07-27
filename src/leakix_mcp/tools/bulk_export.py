@@ -3,35 +3,33 @@
 from typing import Any
 
 from leakix import AsyncClient, RawQuery
-from mcp.types import Tool
+from pydantic import BaseModel, Field
 
-TOOL = Tool(
-    name="bulk_export",
-    description=(
-        "Bulk export leak data (requires Pro API). "
-        "Returns aggregated results for large-scale analysis. "
-        "Use this for exporting large datasets efficiently. "
-        "Results include grouped events by target."
-    ),
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": (
-                    "Search query. Examples: "
-                    "'+plugin:GitConfigHttpPlugin', "
-                    "'+country:FR +plugin:MongoOpenPlugin'"
-                ),
-            },
-        },
-        "required": ["query"],
-    },
+from .helpers import build_tool, unwrap
+
+
+class Args(BaseModel):
+    """Arguments for bulk_export."""
+
+    query: str = Field(
+        description=(
+            "Search query. Examples: '+plugin:GitConfigHttpPlugin', "
+            "'+country:FR +plugin:MongoOpenPlugin'"
+        )
+    )
+
+
+TOOL = build_tool(
+    "bulk_export",
+    "Bulk export leak data (requires Pro API). "
+    "Returns aggregated results for large-scale analysis. "
+    "Use this for exporting large datasets efficiently. "
+    "Results include grouped events by target.",
+    Args,
 )
 
 
 async def handle(client: AsyncClient, arguments: dict[str, Any]) -> Any:
     """Handle bulk_export tool call."""
-    query = arguments["query"]
-    r = await client.bulk_export(queries=[RawQuery(query)])
-    return r.json() if r.is_success() else []
+    args = Args.model_validate(arguments)
+    return unwrap(await client.bulk_export(queries=[RawQuery(args.query)]))
