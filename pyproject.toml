@@ -37,6 +37,13 @@ dev = [
     "ruff>=0.15.22",
     "mypy>=2.3.0",
     "hypothesis>=6.0",
+    "pytest-cov>=7.1.0",
+    "pip-audit>=2.10.1",
+    "cyclonedx-bom>=7.3.1",
+    "nox>=2026.7.11",
+    "mkdocs-material>=9.7.7",
+    "mkdocstrings[python]>=1.0.6",
+    "zizmor>=1.28.0",
 ]
 
 [build-system]
@@ -57,7 +64,37 @@ line-length = 80
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "I",     # isort
+    "N",     # pep8-naming
+    "W",     # pycodestyle warnings
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "C4",    # flake8-comprehensions
+    "SIM",   # flake8-simplify
+    "S",     # flake8-bandit (SAST)
+    "ASYNC", # flake8-async
+    "PT",    # flake8-pytest-style
+    "PTH",   # flake8-use-pathlib
+    "PIE",   # flake8-pie
+    "RET",   # flake8-return
+    "ARG",   # flake8-unused-arguments
+    "ERA",   # eradicate (commented-out code)
+    "RUF",   # ruff-specific
+    "PLC",   # pylint conventions
+    "PLE",   # pylint errors
+    "PLW",   # pylint warnings
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use assert (S101), fixtures/handlers with intentionally unused
+# arguments (ARG), and 0.0.0.0 as sample data (S104).
+"tests/**" = ["S101", "ARG001", "ARG002", "PLW", "S104"]
+# 0.0.0.0 is the intended default listen host (bind all interfaces) for the
+# containerized HTTP transport; it is feature-gated off by default.
+"src/leakix_mcp/address.py" = ["S104"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -69,3 +106,16 @@ warn_unused_ignores = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["leakix_mcp"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
