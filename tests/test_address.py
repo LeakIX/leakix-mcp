@@ -19,6 +19,7 @@ from leakix_mcp.address import (
     PortSyntaxError,
     ServerAddress,
     is_hostname,
+    is_ip,
     parse_address,
     parse_host,
     parse_port,
@@ -239,3 +240,20 @@ def test_parse_address_only_raises_address_error(text: str) -> None:
     except AddressError:
         return
     assert isinstance(result, ServerAddress)
+
+
+# --- is_ip: the Host sum-type injection discriminator ---
+
+
+@pytest.mark.parametrize(
+    ("host", "expected"),
+    [
+        ("127.0.0.1", True),
+        ("::1", True),
+        ("2606:4700:4700::1111", True),
+        ("example.com", False),
+        ("localhost", False),
+    ],
+)
+def test_is_ip_discriminates_injection(host: str, expected: bool) -> None:
+    assert is_ip(parse_host(host)) is expected

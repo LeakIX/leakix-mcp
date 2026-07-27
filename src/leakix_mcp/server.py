@@ -21,15 +21,12 @@ from mcp.types import Resource, TextContent, Tool
 from pydantic import AnyUrl
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
-from starlette.middleware.base import (
-    BaseHTTPMiddleware,
-    RequestResponseEndpoint,
-)
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
 from starlette.routing import Mount
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .address import AddressError, parse_address
+from .features import HTTP_TRANSPORT
 from .resources import get_resources, read_resource
 from .tools import dispatch, get_tools
 
@@ -50,28 +47,16 @@ def get_client() -> AsyncClient:
     return AsyncClient(api_key=key)
 
 
-def serialize_object(obj: Any) -> Any:
-    """Serialize objects to dicts for JSON encoding."""
+def _serialize(obj: Any) -> Any:
+    """JSON default: use to_dict() when available, else str()."""
     if hasattr(obj, "to_dict"):
         return obj.to_dict()
     return str(obj)
 
 
 def format_result(data: Any) -> str:
-    """Format result data as JSON string."""
-    if isinstance(data, list):
-        data = [
-            item.to_dict() if hasattr(item, "to_dict") else item
-            for item in data
-        ]
-    elif isinstance(data, dict):
-        for key, value in data.items():
-            if isinstance(value, list):
-                data[key] = [
-                    item.to_dict() if hasattr(item, "to_dict") else item
-                    for item in value
-                ]
-    return json.dumps(data, indent=2, default=serialize_object)
+    """Format result data as a JSON string (without mutating it)."""
+    return json.dumps(data, indent=2, default=_serialize)
 
 
 @server.list_tools()  # type: ignore[no-untyped-call,untyped-decorator]
@@ -97,18 +82,16 @@ async def handle_read_resource(uri: AnyUrl) -> str:
 
 @server.call_tool()  # type: ignore[untyped-decorator]
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
-    """Execute a LeakIX tool."""
-    client = get_client()
+    """Execute a LeakIX tool.
 
-    try:
-        result = await dispatch(client, name, arguments)
-        if result is None:
-            return [TextContent(type="text", text=f"Unknown tool: {name}")]
-        return [TextContent(type="text", text=format_result(result))]
-    except ValueError as e:
-        return [TextContent(type="text", text=f"Configuration error: {e}")]
-    except Exception as e:
-        return [TextContent(type="text", text=f"Error: {e}")]
+    Exceptions propagate: the MCP SDK converts them into an error result
+    (isError=True), so a failure is never reported as a successful reply.
+    """
+    client = get_client()
+    result = await dispatch(client, name, arguments)
+    if result is None:
+        raise ValueError(f"Unknown tool: {name}")
+    return [TextContent(type="text", text=format_result(result))]
 
 
 async def run_stdio() -> None:
@@ -129,24 +112,36 @@ async def run_stdio() -> None:
         )
 
 
+class ApiKeyMiddleware:
+    """Pure-ASGI middleware that requires and stores the API key.
+
+    Running as pure ASGI (rather than BaseHTTPMiddleware) keeps the key on
+    the same context as the downstream handler, so get_client() sees it.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(
+        self, scope: Scope, receive: Receive, send: Send
+    ) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = dict(scope["headers"])
+        key = headers.get(b"x-api-key", b"").decode()
+        if not key:
+            response = JSONResponse(
+                {"error": "x-api-key header is required"}, status_code=401
+            )
+            await response(scope, receive, send)
+            return
+        _api_key.set(key)
+        await self.app(scope, receive, send)
+
+
 def run_http(host: str, port: int) -> None:
     """Run the MCP server over Streamable HTTP."""
-
-    class ApiKeyMiddleware(BaseHTTPMiddleware):
-        async def dispatch(
-            self,
-            request: Request,
-            call_next: RequestResponseEndpoint,
-        ) -> Response:
-            key = request.headers.get("x-api-key", "")
-            if not key:
-                return JSONResponse(
-                    {"error": "x-api-key header is required"},
-                    status_code=401,
-                )
-            _api_key.set(key)
-            return await call_next(request)
-
     session_manager = StreamableHTTPSessionManager(app=server)
 
     @asynccontextmanager
@@ -170,14 +165,19 @@ def main() -> None:
     parser.add_argument(
         "--server-address",
         default=None,
-        help="Listen address for HTTP transport "
-        "(e.g. '0.0.0.0:8080' or ':8081'). "
-        "Defaults to stdio transport if not set.",
+        help="Listen address for the experimental HTTP transport "
+        "(e.g. '0.0.0.0:8080' or ':8081'), gated behind "
+        f"{HTTP_TRANSPORT.env_var}=1. Defaults to stdio transport.",
     )
     args = parser.parse_args()
 
     try:
         if args.server_address:
+            if not HTTP_TRANSPORT.enabled():
+                parser.error(
+                    "HTTP transport is experimental and disabled. "
+                    f"Set {HTTP_TRANSPORT.env_var}=1 to enable it."
+                )
             try:
                 address = parse_address(args.server_address)
             except AddressError as e:

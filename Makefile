@@ -74,14 +74,14 @@ lint: ## Run linter
 
 .PHONY: typecheck
 typecheck: ## Run type checker
-	uv run mypy src/
+	uv run mypy src/ tests/
 
 .PHONY: test
 test: ## Run tests
 	uv run pytest tests/ -v
 
 .PHONY: check
-check: check-format lint typecheck ## Run all checks
+check: check-format lint typecheck test ## Run all checks
 
 .PHONY: run
 run: ## Run the MCP server (requires LEAKIX_API_KEY env var)
