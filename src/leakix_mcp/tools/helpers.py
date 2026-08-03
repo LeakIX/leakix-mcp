@@ -54,5 +54,7 @@ def build_tool(name: str, description: str, args: type[BaseModel]) -> Tool:
     JSON input schema and validates incoming arguments in the handler.
     """
     return Tool(
-        name=name, description=description, inputSchema=args.model_json_schema()
+        name=name,
+        description=description,
+        input_schema=args.model_json_schema(),
     )
