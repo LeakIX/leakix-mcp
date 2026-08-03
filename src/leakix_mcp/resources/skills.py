@@ -3,13 +3,12 @@
 from importlib.resources import files
 
 from mcp.types import Resource
-from pydantic import AnyUrl
 
 RESOURCE = Resource(
-    uri=AnyUrl("leakix://skills.md"),
+    uri="leakix://skills.md",
     name="skills",
     description="Usage guide and workflows for the LeakIX MCP server.",
-    mimeType="text/markdown",
+    mime_type="text/markdown",
 )
 
 

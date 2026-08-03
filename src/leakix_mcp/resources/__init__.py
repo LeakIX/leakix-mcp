@@ -12,10 +12,19 @@ _READERS: dict[str, Callable[[], Awaitable[str]]] = {
     str(mod.RESOURCE.uri): mod.read for mod in _MODULES
 }
 
+_RESOURCES: dict[str, Resource] = {
+    str(mod.RESOURCE.uri): mod.RESOURCE for mod in _MODULES
+}
+
 
 def get_resources() -> list[Resource]:
     """Return all registered MCP resources."""
     return [mod.RESOURCE for mod in _MODULES]
+
+
+def get_resource(uri: str) -> Resource | None:
+    """Return the registered resource for a URI, or None if not found."""
+    return _RESOURCES.get(uri)
 
 
 async def read_resource(uri: str) -> str | None:

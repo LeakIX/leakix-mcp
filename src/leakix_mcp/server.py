@@ -12,13 +12,23 @@ from typing import Any
 
 import uvicorn
 from leakix import AsyncClient
-from mcp.server import Server
+from mcp.server import Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
 from mcp.server.streamable_http_manager import (
     StreamableHTTPSessionManager,
 )
-from mcp.types import Resource, TextContent, Tool
-from pydantic import AnyUrl
+from mcp.shared.exceptions import MCPError
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ListResourcesResult,
+    ListToolsResult,
+    PaginatedRequestParams,
+    ReadResourceRequestParams,
+    ReadResourceResult,
+    TextContent,
+    TextResourceContents,
+)
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.responses import JSONResponse
@@ -27,10 +37,8 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .address import AddressError, parse_address
 from .features import HTTP_TRANSPORT
-from .resources import get_resources, read_resource
+from .resources import get_resource, get_resources, read_resource
 from .tools import dispatch, get_tools
-
-server = Server("leakix-mcp")
 
 _api_key: ContextVar[str] = ContextVar("api_key")
 
@@ -59,39 +67,73 @@ def format_result(data: Any) -> str:
     return json.dumps(data, indent=2, default=_serialize)
 
 
-@server.list_tools()  # type: ignore[no-untyped-call,untyped-decorator]
-async def list_tools() -> list[Tool]:
+async def list_tools(
+    _ctx: ServerRequestContext[Any], _params: PaginatedRequestParams | None
+) -> ListToolsResult:
     """List available LeakIX tools."""
-    return get_tools()
+    return ListToolsResult(tools=get_tools())
 
 
-@server.list_resources()  # type: ignore[no-untyped-call,untyped-decorator]
-async def list_resources() -> list[Resource]:
+async def list_resources(
+    _ctx: ServerRequestContext[Any], _params: PaginatedRequestParams | None
+) -> ListResourcesResult:
     """List available LeakIX resources."""
-    return get_resources()
+    return ListResourcesResult(resources=get_resources())
 
 
-@server.read_resource()  # type: ignore[no-untyped-call,untyped-decorator]
-async def handle_read_resource(uri: AnyUrl) -> str:
+async def handle_read_resource(
+    _ctx: ServerRequestContext[Any], params: ReadResourceRequestParams
+) -> ReadResourceResult:
     """Read a LeakIX resource by URI."""
-    content = await read_resource(str(uri))
+    uri = str(params.uri)
+    content = await read_resource(uri)
     if content is None:
-        raise ValueError(f"Unknown resource: {uri}")
-    return content
+        raise ValueError(f"Unknown resource: {params.uri}")
+    resource = get_resource(uri)
+    return ReadResourceResult(
+        contents=[
+            TextResourceContents(
+                uri=params.uri,
+                mime_type=resource.mime_type if resource else None,
+                text=content,
+            )
+        ]
+    )
 
 
-@server.call_tool()  # type: ignore[untyped-decorator]
-async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+async def call_tool(
+    _ctx: ServerRequestContext[Any], params: CallToolRequestParams
+) -> CallToolResult:
     """Execute a LeakIX tool.
 
-    Exceptions propagate: the MCP SDK converts them into an error result
-    (isError=True), so a failure is never reported as a successful reply.
+    Failures are returned as an error result (isError=True) rather than a
+    successful reply, so a failure is never mistaken for an empty answer.
+    The low-level server hands the handler the raw params, so this does the
+    exception-to-error-result conversion the SDK used to do for us.
     """
-    client = get_client()
-    result = await dispatch(client, name, arguments)
-    if result is None:
-        raise ValueError(f"Unknown tool: {name}")
-    return [TextContent(type="text", text=format_result(result))]
+    try:
+        client = get_client()
+        result = await dispatch(client, params.name, params.arguments or {})
+        if result is None:
+            raise ValueError(f"Unknown tool: {params.name}")
+        return CallToolResult(
+            content=[TextContent(type="text", text=format_result(result))]
+        )
+    except MCPError:
+        raise
+    except Exception as e:
+        return CallToolResult(
+            content=[TextContent(type="text", text=str(e))], is_error=True
+        )
+
+
+server = Server(
+    "leakix-mcp",
+    on_list_tools=list_tools,
+    on_list_resources=list_resources,
+    on_read_resource=handle_read_resource,
+    on_call_tool=call_tool,
+)
 
 
 async def run_stdio() -> None:

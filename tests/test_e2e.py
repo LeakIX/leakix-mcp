@@ -4,7 +4,7 @@ transport.
 Only the external boundary (the LeakIX AsyncClient, i.e. the leakix.net
 endpoint) is faked: `server.get_client` is patched with a mock whose
 methods return canned leakix.net JSON. Everything else runs for real: the
-MCP protocol, inputSchema validation, argument parsing, error surfacing,
+MCP protocol, input-schema validation, argument parsing, error surfacing,
 and result serialization.
 
 Responses, clients, and sessions are produced by factory fixtures (fixture
@@ -20,10 +20,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from leakix import Scope
-from mcp import ClientSession
-from mcp.shared.memory import create_connected_server_and_client_session
+from mcp import Client as MCPClient
 from mcp.types import TextContent
-from pydantic import AnyUrl
 
 import leakix_mcp.server as server_module
 from leakix_mcp.server import server
@@ -32,7 +30,7 @@ from leakix_mcp.server import server
 Response = Callable[..., Any]
 Client = Callable[..., Any]
 OkMethod = Callable[[Any], AsyncMock]
-SessionFor = Callable[[Any], AbstractAsyncContextManager[ClientSession]]
+SessionFor = Callable[[Any], AbstractAsyncContextManager[MCPClient]]
 CallTool = Callable[[Any, str, dict[str, Any]], Awaitable[Any]]
 
 
@@ -81,11 +79,9 @@ def session_for(monkeypatch: pytest.MonkeyPatch) -> SessionFor:
     """Factory: a live MCP session whose leakix client is the given mock."""
 
     @asynccontextmanager
-    async def _open(mock_client: Any) -> AsyncIterator[ClientSession]:
+    async def _open(mock_client: Any) -> AsyncIterator[MCPClient]:
         monkeypatch.setattr(server_module, "get_client", lambda: mock_client)
-        async with create_connected_server_and_client_session(
-            server
-        ) as session:
+        async with MCPClient(server) as session:
             yield session
 
     return _open
@@ -155,7 +151,7 @@ def _text(result: Any) -> str:
 
 def _payload(result: Any) -> Any:
     """Assert success and return the parsed JSON body of a tool result."""
-    assert result.isError is False, _text(result)
+    assert result.is_error is False, _text(result)
     return json.loads(_text(result))
 
 
@@ -303,7 +299,7 @@ async def test_list_tools(client: Client, session_for: SessionFor) -> None:
     assert len(result.tools) == 10
     assert {"host_lookup", "search_leaks", "exposure_report"} <= names
     host = next(t for t in result.tools if t.name == "host_lookup")
-    assert host.inputSchema["required"] == ["ip"]
+    assert host.input_schema["required"] == ["ip"]
 
 
 async def test_api_failure_is_error(
@@ -318,7 +314,7 @@ async def test_api_failure_is_error(
         )
     )
     result = await call(c, "host_lookup", {"ip": "1.2.3.4"})
-    assert result.isError is True
+    assert result.is_error is True
     assert "429" in _text(result)
 
 
@@ -326,16 +322,16 @@ async def test_invalid_args_is_error(client: Client, call: CallTool) -> None:
     """A non-IP for host_lookup is rejected by the pydantic validator."""
     c = client(get_host=AsyncMock())
     result = await call(c, "host_lookup", {"ip": "example.com"})
-    assert result.isError is True
+    assert result.is_error is True
     c.get_host.assert_not_awaited()
 
 
 async def test_missing_required_is_error(
     client: Client, call: CallTool
 ) -> None:
-    """The SDK rejects arguments that violate the generated inputSchema."""
+    """A call missing a required argument is rejected, not silently run."""
     result = await call(client(), "search_leaks", {})
-    assert result.isError is True
+    assert result.is_error is True
 
 
 async def test_resources(client: Client, session_for: SessionFor) -> None:
@@ -343,6 +339,6 @@ async def test_resources(client: Client, session_for: SessionFor) -> None:
         listed = await session.list_resources()
         uris = {str(r.uri) for r in listed.resources}
         assert "leakix://skills.md" in uris
-        read = await session.read_resource(AnyUrl("leakix://skills.md"))
+        read = await session.read_resource("leakix://skills.md")
     text = "".join(getattr(c, "text", "") for c in read.contents)
     assert text.strip() != ""
