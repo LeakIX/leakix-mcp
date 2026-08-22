@@ -24,7 +24,7 @@ dependencies = [
     "mcp>=2.0.0",
     "pydantic>=2.13.4",
     "leakix>=1.0.0",
-    "uvicorn>=0.51.0",
+    "uvicorn>=0.52.3",
 ]
 
 [project.scripts]
