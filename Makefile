@@ -93,11 +93,11 @@ test-all: ## Run tests across all supported Python versions (nox)
 .PHONY: audit
 audit: ## Audit dependencies for known vulnerabilities
 	@audit_requirements_file="$$(mktemp)"; \
+	trap 'rm -f "$$audit_requirements_file"' EXIT; \
 	uv export --format requirements-txt --no-dev --no-emit-project \
 		--no-hashes -o "$$audit_requirements_file"; \
 	uv tool run --from pip-audit pip-audit \
-		-r "$$audit_requirements_file" --progress-spinner=off; \
-	rm -f "$$audit_requirements_file"
+		-r "$$audit_requirements_file" --progress-spinner=off
 
 .PHONY: zizmor
 zizmor: ## Audit GitHub Actions workflows for security issues
